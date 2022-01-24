@@ -7,6 +7,10 @@ class EBM():
         self.df = df
         self.args = args
         self.additive_terms = {}
+        if self.args.regression:
+            self.regression = True
+        else:
+            self.regression = False
 
     def preprocess(self):
         self.data_type = {}
@@ -65,6 +69,7 @@ class EBM():
 
         # initialize addtivie terms
         self.intercept = self.args.intercept
+        # additiveterms[feature][epoch][additiveterms_per_histogram]
         for i in self.df.columns:
             self.additive_terms[i] = []
         
@@ -90,7 +95,7 @@ class EBM():
                     continue
                 for p in range(right-left):
                     split_point = left + p
-                    gain = self.get_sim_score(split_point, left, right)
+                    gain = self.get_gain(feature, split_point, left, right)
                     if max_gain < gain:
                         max_gain, max_split_point, max_left, max_right = gain, split_point, left, right
             split.remove([max_left, max_right])
@@ -99,9 +104,26 @@ class EBM():
 
         return
 
-    def get_sim_score(self, split_point, left, right):
+    def get_sim_score_numerical(self, feature, left, right):
+        # if reg or class -> residual
+        pass
+
+    def get_sim_score_categorical(self, feature, left, right):
+        pass
+
+    def get_gain(self, feature, split_point, left, right):
         # (left<= x <= split_point), (split_point +1 <= x <= right)
-        return
+        if self.data_type[feature] == 0: # numerical
+            sim_left = self.get_sim_score_numerical(feature, left, split_point)
+            sim_right = self.get_sim_score_numerical(feature, split_point+1, right)
+            sim_parent = self.get_sim_score_numerical(feature, left, right)
+
+        else:
+            sim_left = self.get_sim_score_categorical(feature, left, split_point)
+            sim_right = self.get_sim_score_categorical(feature, split_point+1, right)
+            sim_parent = self.get_sim_score_categorical(feature, left, right)
+
+        return sim_left + sim_right - sim_parent
 
     def fit(self):
         self.preprocess()
