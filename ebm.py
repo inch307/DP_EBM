@@ -169,6 +169,8 @@ class EBM():
         return
 
     def get_af_threshold(self, feature, epoch):
+        def regularized_gamma(x):
+            return scipy.special.gammainc(k, x/theta) - self.args.af_prob
         split = self.additive_terms[epoch][feature]['split']
         #  Welch–Satterthwaite equation 
         
@@ -179,12 +181,25 @@ class EBM():
             total_data = sum(self.histograms[feature]['count'].values())
         
         if self.args.delta == 0:
-            n = len(split)
-            alpha = n
-            beta = self.range_label / self.residual_noise_scale  
-        else:
+            # split_strategy: threshold column
             if self.args.split_strategy:
-                ks = 0.5
+                noises = []
+                for s in split:
+                    noise = 0
+                    for f in s:
+                        noise += np.random.laplace(0, self.residual_noise_scale * self.range_label)
+                    noises.append(noise)
+                return sum(abs(np.array(noises))) / total_data * self.args.af_prob
+            # random_split
+            # sum of exponential distribution (1, 1/lambda)
+            else:
+                k = len(split)
+                theta = self.residual_noise_scale * self.range_label / total_data
+        else:
+            # Gaussian DP, split_strategy
+            # gamma(k, theta)
+            # X ~ N(0, sigma^2), X^2 ~ Gamma(1/2, 2*sigma^2)
+            if self.args.split_strategy:
                 thetas = []
                 for s in split:
                     sigma_sq = 0
@@ -193,13 +208,13 @@ class EBM():
                     thetas.append(2*sigma_sq)
                 thetas = np.array(thetas)
                 k = ((sum(thetas)) ** 2) / sum(thetas**2)
-                theta = sum(thetas) / (k * total_data) 
+                theta = sum(thetas) / (k * total_data)
+            # Gaussian DP, random_split
             else:
+                # sum of Gamma(1/2, 2*sigma^2) -> Gamma(n/2, 2*sigma^2)
                 k = len(split) / 2
                 theta = 2 * ((self.range_label * self.residual_noise_scale) ** 2) / total_data
-            def regularized_gamma(x):
-                    return scipy.special.gammainc(k, x/theta) - self.args.af_prob
-        
+  
         sol = scipy.optimize.root_scalar(regularized_gamma,bracket=[1e-8, k*theta/(1-self.args.af_prob)],method='brentq')
         return sol.root
 
@@ -216,6 +231,7 @@ class EBM():
                 residuals[c] = 0
                 for idx in self.hist_idx[feature][c]:
                     residuals[c] += self.residuals[idx]
+
         if self.args.privacy and self.args.split_strategy:
             if self.args.delta == 0:
                 noise = np.random.laplace(0, self.residual_noise_scale * self.range_label, len(residuals))
@@ -232,22 +248,22 @@ class EBM():
         return residuals
 
     def get_histogram_hessian(self, feature):
-        if (not self.args.regression) and self.args.classification_hessian:
-            num_bins = len(self.histograms[feature]['count'])
-            if self.data_type[feature] == NUMERICAL:
-                hessian = [0 for i in range(num_bins)]
-                for b in range(num_bins):
-                    for idx in self.hist_idx[feature][b]:
-                        hessian[b] += abs(self.residuals[idx]) * (1- abs(self.residuals[idx]))
-            else:
-                hessian = {}
-                for c in self.histograms[feature]['bin']:
-                    hessian[c] = 0
-                    for idx in self.hist_idx[feature][c]:
-                        hessian[c] += abs(self.residuals[idx]) * (1- abs(self.residuals[idx]))
-            return hessian
-        else:
-            return self.histograms[feature]['count']
+        # if (not self.args.regression) and self.args.classification_hessian:
+        #     num_bins = len(self.histograms[feature]['count'])
+        #     if self.data_type[feature] == NUMERICAL:
+        #         hessian = [0 for i in range(num_bins)]
+        #         for b in range(num_bins):
+        #             for idx in self.hist_idx[feature][b]:
+        #                 hessian[b] += abs(self.residuals[idx]) * (1- abs(self.residuals[idx]))
+        #     else:
+        #         hessian = {}
+        #         for c in self.histograms[feature]['bin']:
+        #             hessian[c] = 0
+        #             for idx in self.hist_idx[feature][c]:
+        #                 hessian[c] += abs(self.residuals[idx]) * (1- abs(self.residuals[idx]))
+        #     return hessian
+        # else:
+        return self.histograms[feature]['count']
         
 
     # numerical split
@@ -366,6 +382,10 @@ class EBM():
         self.remain_eps = self.ebm_eps
         # Gaussian
         self.remain_mu = DPUtils.calc_gdp_mu(self.ebm_eps, self.ebm_delta)
+        # adaptive_feature count
+        self.af_count = {}
+        for c in self.candidate_feature:
+            self.af_count[c] = self.args.af_count
 
         for epoch in range(self.args.epochs):
             # print(epoch)
@@ -384,6 +404,8 @@ class EBM():
                 self.residual_noise_scale = (self.args.epochs - epoch) * len(self.candidate_feature) / self.remain_eps
             else:
                 self.residual_noise_scale = np.sqrt((self.args.epochs - epoch) * len(self.candidate_feature)) / self.remain_mu
+            if len(self.candidate_feature) == 0:
+                break
             for feature in self.candidate_feature:
                 self.additive_terms[epoch][feature] = {}
                 self.additive_terms[epoch][feature]['additive_term'] = []
@@ -457,6 +479,7 @@ class EBM():
                             sum_hessian += histogram_hessian[bin]
                         if self.args.privacy and (not self.args.split_strategy):
                             if self.args.delta == 0:
+                                # b or lambda = self.residual_noise_scale * self.range_label
                                 sum_residuals += np.random.laplace(0, self.residual_noise_scale * self.range_label)
                             else:
                                 sum_residuals += np.random.normal(0, self.residual_noise_scale * self.range_label)
@@ -490,23 +513,33 @@ class EBM():
                 
                 mean_score = mean_score / total_data
                 mean_scores[feature] = mean_score
+            # tracking privacy budget
             if self.args.delta == 0:
                 self.remain_eps = self.remain_eps - (self.remain_eps / (self.args.epochs - epoch))
             else:
                 self.remain_mu = np.sqrt(max((self.remain_mu ** 2) - len(self.candidate_feature)*((1/self.residual_noise_scale) ** 2), 0))
             
+            # adaptive feature
             if self.args.adaptive_feature and (self.af_epoch % self.args.af_epoch == 0):
                 mean_scores = {k: v for k, v in sorted(mean_scores.items(), key=lambda item: item[1])}
+                # print(mean_scores)
                 for k, v in mean_scores.items():
                     af_threshold = self.get_af_threshold(k, epoch)
+                    # print(af_threshold)
                     if v < af_threshold:
                         # print(f'threshold: {af_threshold}, value: {v}, removed: {k}')
-                        remove_features.append(k)
+                        self.af_count[k] -= 1
+                        if self.af_count[k] == 0:
+                            remove_features.append(k)
                     if len(remove_features) == self.args.af_max_remove:
                         break
                 self.af_epoch = 0
+                # print(self.candidate_feature)
+                if self.args.adaptive_lr:
+                    self.lr += self.lr / len(self.candidate_feature) * len(remove_features)
                 for r in remove_features:
                     self.candidate_feature.remove(r)
+                # print(self.candidate_feature)
 
         for feature in self.df.columns:
             if self.data_type[feature] == NUMERICAL:
@@ -528,7 +561,7 @@ class EBM():
                     self.decision_function[feature][bin] -= mean_score
                 self.intercept += mean_score
         return
-        
+
     def predict(self, df, label_df):
         num_data = df.shape[0]
         output_value = np.zeros(num_data) + self.intercept
@@ -536,8 +569,17 @@ class EBM():
         if self.args.privacy:
             for i in self.df.columns:
                 if self.data_type[i] == CATEGORICAL:
-                    if len(self.feature_DPOthers[i]) > 0:
-                        df[i] = df[i].replace(self.feature_DPOthers[i], 'DPOther')
+                    col_data = df[i].to_numpy()
+                    dpothers = []
+                    uniq_vals, _ =np.unique(col_data, return_inverse=True)
+                    # print(uniq_vals)
+                    # print(self.histograms[i]['bin'])
+                    for u in uniq_vals:
+                        if u not in self.histograms[i]['bin']:
+                            dpothers.append(u)
+                    # if len(self.feature_DPOthers[i]) > 0:
+                    #     df[i] = df[i].replace(self.feature_DPOthers[i], 'DPOther')
+                    df[i] = df[i].replace(dpothers, 'DPOther')
 
         # regression or
         # classification
@@ -563,7 +605,7 @@ class EBM():
             y_hat = output_value
             total_squared_error = np.sum((label - y_hat)**2)
             mse = total_squared_error / num_data
-            return y_hat, mse
+            return math.sqrt(mse)
 
         else:
             total_loss = 0
@@ -583,4 +625,4 @@ class EBM():
 
             auroc = roc_auc_score(label, y_hat)
 
-            return y_hat, total_correct / num_data, auroc, mean_loss
+            return total_correct / num_data, auroc
