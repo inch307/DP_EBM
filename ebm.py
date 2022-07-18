@@ -615,11 +615,11 @@ class EBM():
             y_hat = 1 / (1 + np.exp(-output_value))
             for idx, l in enumerate(label):
                 if l == 0:
-                    total_loss -= np.log(1-y_hat[idx])
+                    # total_loss -= np.log(1-y_hat[idx])
                     if y_hat[idx] < 0.5:
                         total_correct += 1
                 else:
-                    total_loss -= np.log(y_hat[idx])
+                    # total_loss -= np.log(y_hat[idx])
                     if y_hat[idx] >= 0.5:
                         total_correct += 1
 
