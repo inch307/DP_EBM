@@ -46,6 +46,7 @@ parser.add_argument('--gamma', type=float, default=0, help='parameter for prunin
 
 def main():
     args = parser.parse_args()
+    print(args)
     
     df = pd.read_csv(args.data_path)
     # print(df)

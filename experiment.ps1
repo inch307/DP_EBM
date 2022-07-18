@@ -28,7 +28,7 @@ foreach ($e in $eps) {
                 foreach ($ap in $af_prob){
                     foreach ($ac in $af_count){
                         foreach ($al in $adaptive_lr){
-                            python .\run.py --label label --lr 0.01 --epochs 300 --max_leaves $ml --privacy $ss --eps $e --delta $d --n_runs 25 --adaptive_feature --af_prob $ap --af_count $ac $al
+                            python .\run.py --label label --lr 0.01 --epochs 300 --max_leaves $ml --privacy $ss --eps $e --delta $d --n_runs 25 --adaptive_feature $al --af_prob $ap --af_count $ac
                         }
                     }
                 }

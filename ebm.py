@@ -53,6 +53,7 @@ class EBM():
                 self.data_type[i] = NUMERICAL
 
         # build historgam
+        #TODO: nan data
         self.histograms = {}
         self.hist_idx = {}
         if self.args.privacy:
@@ -137,7 +138,7 @@ class EBM():
                     for idx, col in enumerate(col_data):
                         self.hist_idx[i][col].append(idx)
 
-        print('histogram done')
+        # print('histogram done')
         #### initializing
 
         # initialize addtivie terms
@@ -567,13 +568,13 @@ class EBM():
         output_value = np.zeros(num_data) + self.intercept
         label = label_df.to_numpy().astype(float)
         if self.args.privacy:
-            for i in self.df.columns:
+            for i in df.columns:
                 if self.data_type[i] == CATEGORICAL:
                     col_data = df[i].to_numpy()
                     dpothers = []
                     uniq_vals, _ =np.unique(col_data, return_inverse=True)
-                    # print(uniq_vals)
-                    # print(self.histograms[i]['bin'])
+                    # print(f'uv: {uniq_vals}')
+                    # print(f'\n hist: {self.histograms[i]["bin"]}')
                     for u in uniq_vals:
                         if u not in self.histograms[i]['bin']:
                             dpothers.append(u)
@@ -583,7 +584,7 @@ class EBM():
 
         # regression or
         # classification
-        for i in self.df.columns:
+        for i in df.columns:
             col_data = df[i].to_numpy()
             # numeric
             if self.data_type[i] == NUMERICAL:
@@ -599,7 +600,8 @@ class EBM():
             # categorical
             elif self.data_type[i] == CATEGORICAL:
                 for idx, val in enumerate(col_data):
-                    output_value[idx] += self.decision_function[i][val] 
+                    if val in self.histograms[i]['bin']:
+                        output_value[idx] += self.decision_function[i][val] 
         
         if self.args.regression:
             y_hat = output_value
