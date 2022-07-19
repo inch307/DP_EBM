@@ -11,11 +11,16 @@ foreach ($e in $eps) {
     foreach ($d in $delta){
         foreach ($ml in $max_leaves){
             foreach ($ss in $split_strategy){
-                python .\run.py --label label --lr 0.01 --epochs 300 --max_leaves $ml --privacy $ss --eps $e --delta $d --n_runs 25
+                foreach ($ap in $af_prob){
+                    foreach ($ac in $af_count){
+                            python .\run.py --label label --lr 0.01 --epochs 300 --max_leaves $ml --privacy $ss --eps $e --delta $d --n_runs 25 --adaptive_feature --af_prob $ap --af_count $ac
+                    }
+                }
             }
         }
     }
 }
+
 
 foreach ($e in $eps) {
     foreach ($d in $delta){
@@ -23,9 +28,7 @@ foreach ($e in $eps) {
             foreach ($ss in $split_strategy){
                 foreach ($ap in $af_prob){
                     foreach ($ac in $af_count){
-                        foreach ($al in $adaptive_lr){
-                            python .\run.py --label label --lr 0.01 --epochs 300 --max_leaves $ml --privacy $ss --eps $e --delta $d --n_runs 25 --adaptive_feature $al --af_prob $ap --af_count $ac
-                        }
+                            python .\run.py --label label --lr 0.01 --epochs 300 --max_leaves $ml --privacy $ss --eps $e --delta $d --n_runs 25 --adaptive_feature --adaptive_lr --af_prob $ap --af_count $ac
                     }
                 }
             }
