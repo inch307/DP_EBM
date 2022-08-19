@@ -6,6 +6,7 @@ import ebm
 import dpebm
 import os
 from utils import *
+import matplotlib.pyplot as plt
 
 parser = argparse.ArgumentParser(description='DP_EBM')
 ## 
@@ -25,7 +26,7 @@ parser.add_argument('--hist_ebm_ratio', type=float, default=0.9, help='ebm_eps =
 # parser.add_argument('--residual_eps_ratio', type=float, default=0.5, help='residual_eps = ebm_eps * ratio, hessian_eps = ebm_eps - residual_eps ;; only for privacy and classification_hessian')
 parser.add_argument('--split_strategy', default=False, action='store_true', help='False: random split, True: split_strategy')
 parser.add_argument('--adaptive_feature', default=False, action='store_true')
-parser.add_argument('--adaptive_lr', default=False, help='adpative lr when adaptive feature')
+parser.add_argument('--adaptive_lr', default=False, action='store_true', help='adpative lr when adaptive feature')
 parser.add_argument('--af_epoch', default=1, type=int, help='prune feature each af_epoch')
 parser.add_argument('--af_prob', default=0.01, type=float, help='prune probabilty bound')
 parser.add_argument('--af_max_remove', default=2, type=int, help='at each af_epoch, #af_max_prune features can be removed at most')
@@ -109,6 +110,7 @@ def main():
         write_lst.append(np.mean(auroc))
         write_lst.append(np.std(auroc))
     wr.writerow(write_lst)
+    csv_f.close()
 
     return
 
