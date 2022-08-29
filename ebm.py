@@ -2,18 +2,19 @@ from audioop import reverse
 from codecs import unicode_escape_decode
 from sklearn.pipeline import FeatureUnion
 
-from torch import cross, mean
 from utils import *
 from sklearn.metrics import roc_auc_score
 import numpy as np
 import math
 import random
 import scipy
+import warnings
 
 from dputils import DPUtils
 
 NUMERICAL = 0
 CATEGORICAL = 1
+warnings.filterwarnings('ignore', message='overflow encountered in exp')
 
 class EBM():
     def __init__(self, df, args):
@@ -51,6 +52,7 @@ class EBM():
                 self.data_type[i] = CATEGORICAL
             else:
                 self.data_type[i] = NUMERICAL
+        # print(self.data_type)
 
         # build historgam
         #TODO: nan data
@@ -391,6 +393,7 @@ class EBM():
         for epoch in range(self.args.epochs):
             # print(epoch)
             # initialize
+            # print(epoch)
             if self.args.delta == 0:
                 if self.remain_eps <= 0:
                     break
@@ -408,6 +411,7 @@ class EBM():
             if len(self.candidate_feature) == 0:
                 break
             for feature in self.candidate_feature:
+                # print(feature)
                 self.additive_terms[epoch][feature] = {}
                 self.additive_terms[epoch][feature]['additive_term'] = []
                 mean_score = 0
@@ -462,7 +466,7 @@ class EBM():
                             else:
                                 for idx in self.hist_idx[feature][bin]:
                                     self.output_values[idx] += update_grad
-                                    self.residuals[idx] = self.label[idx] -1 + (1/(1+math.exp(self.output_values[idx])))
+                                    self.residuals[idx] = self.label[idx] -1 + (1/(1+np.exp(self.output_values[idx])))
 
                 else: # categorical
                     histogram_residuals = self.get_histogram_residual(feature)
@@ -510,7 +514,7 @@ class EBM():
                             else:
                                 for idx in self.hist_idx[feature][bin]:
                                     self.output_values[idx] += update_grad
-                                    self.residuals[idx] = self.label[idx] -1 + (1/(1+math.exp(self.output_values[idx])))
+                                    self.residuals[idx] = self.label[idx] -1 + (1/(1+np.exp(self.output_values[idx])))
                 
                 mean_score = mean_score / total_data
                 mean_scores[feature] = mean_score

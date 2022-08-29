@@ -1,3 +1,6 @@
 /data
 /__pycache__
 *.pptx
+*.ps1
+*.csv
+*.xlsx

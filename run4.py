@@ -51,11 +51,11 @@ def main():
     
     df = pd.read_csv(args.data_path)
     # print(df)
-    if os.path.exists('experiment2.csv'):
-        csv_f = open('experiment2.csv', 'a', newline='')
+    if os.path.exists('experiment4.csv'):
+        csv_f = open('experiment4.csv', 'a', newline='')
         wr = csv.writer(csv_f)
     else:
-        csv_f = open('experiment2.csv', 'w', newline='')
+        csv_f = open('experiment4.csv', 'w', newline='')
         wr = csv.writer(csv_f)
         write_columns(wr)
 
@@ -66,8 +66,7 @@ def main():
     auroc_lst = []
     for i in range(args.n_runs):
         df_train, df_test = train_test_split(df, 0.8)
-        # print(i)
-
+        
         model = ebm.EBM(df_train, args)
         model.fit()
         
