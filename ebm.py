@@ -142,6 +142,19 @@ class EBM():
 
         # print('histogram done')
         #### initializing
+        # total data
+        total_data_sum = 0
+        total_data_nom = 0
+        for i in self.df.columns:
+            if self.data_type[i] == NUMERICAL:
+                for j in self.histograms[i]['count']:
+                    total_data_sum += j
+            else:
+                for j in self.histograms[i]['count'].values():
+                    total_data_sum += j
+            total_data_nom += 1
+        
+        self.total_data = int(total_data_sum // total_data_nom)
 
         # initialize addtivie terms
         self.intercept = 0.
@@ -176,12 +189,7 @@ class EBM():
             return scipy.special.gammainc(k, x/theta) - self.args.af_prob
         split = self.additive_terms[epoch][feature]['split']
         #  Welch–Satterthwaite equation 
-        
-
-        if self.data_type[feature] == NUMERICAL:
-            total_data = sum(self.histograms[feature]['count'])
-        else:
-            total_data = sum(self.histograms[feature]['count'].values())
+    
         
         if self.args.delta == 0:
             # split_strategy: threshold column
@@ -192,12 +200,12 @@ class EBM():
                     for f in s:
                         noise += np.random.laplace(0, self.residual_noise_scale * self.range_label)
                     noises.append(noise)
-                return sum(abs(np.array(noises))) / total_data * self.args.af_prob
+                return sum(abs(np.array(noises))) / self.total_data * self.args.af_prob
             # random_split
             # sum of exponential distribution (1, 1/lambda)
             else:
                 k = len(split)
-                theta = self.residual_noise_scale * self.range_label / total_data
+                theta = self.residual_noise_scale * self.range_label / self.total_data
         else:
             # Gaussian DP, split_strategy
             # gamma(k, theta)
@@ -211,12 +219,12 @@ class EBM():
                     thetas.append(2*sigma_sq)
                 thetas = np.array(thetas)
                 k = ((sum(thetas)) ** 2) / sum(thetas**2)
-                theta = sum(thetas) / (k * total_data)
+                theta = sum(thetas) / (k * self.total_data)
             # Gaussian DP, random_split
             else:
                 # sum of Gamma(1/2, 2*sigma^2) -> Gamma(n/2, 2*sigma^2)
                 k = len(split) / 2
-                theta = 2 * ((self.range_label * self.residual_noise_scale) ** 2) / total_data
+                theta = 2 * ((self.range_label * self.residual_noise_scale) ** 2) / self.total_data
   
         sol = scipy.optimize.root_scalar(regularized_gamma,bracket=[1e-8, k*theta/(1-self.args.af_prob)],method='brentq')
         return sol.root
@@ -251,22 +259,22 @@ class EBM():
         return residuals
 
     def get_histogram_hessian(self, feature):
-        # if (not self.args.regression) and self.args.classification_hessian:
-        #     num_bins = len(self.histograms[feature]['count'])
-        #     if self.data_type[feature] == NUMERICAL:
-        #         hessian = [0 for i in range(num_bins)]
-        #         for b in range(num_bins):
-        #             for idx in self.hist_idx[feature][b]:
-        #                 hessian[b] += abs(self.residuals[idx]) * (1- abs(self.residuals[idx]))
-        #     else:
-        #         hessian = {}
-        #         for c in self.histograms[feature]['bin']:
-        #             hessian[c] = 0
-        #             for idx in self.hist_idx[feature][c]:
-        #                 hessian[c] += abs(self.residuals[idx]) * (1- abs(self.residuals[idx]))
-        #     return hessian
-        # else:
-        return self.histograms[feature]['count']
+        if (not self.args.privacy) and (not self.args.regression) and self.args.classification_hessian:
+            num_bins = len(self.histograms[feature]['count'])
+            if self.data_type[feature] == NUMERICAL:
+                hessian = [0 for i in range(num_bins)]
+                for b in range(num_bins):
+                    for idx in self.hist_idx[feature][b]:
+                        hessian[b] += abs(self.residuals[idx]) * (1- abs(self.residuals[idx]))
+            else:
+                hessian = {}
+                for c in self.histograms[feature]['bin']:
+                    hessian[c] = 0
+                    for idx in self.hist_idx[feature][c]:
+                        hessian[c] += abs(self.residuals[idx]) * (1- abs(self.residuals[idx]))
+            return hessian
+        else:
+            return self.histograms[feature]['count']
         
 
     # numerical split
@@ -331,7 +339,7 @@ class EBM():
     # categorical split
     def get_split_categorical(self, feature, histogram_residuals, histogram_hessian):
         if self.args.privacy and (not self.args.split_strategy):
-            bins =self.histograms[feature]['bin'].tolist()
+            bins = self.histograms[feature]['bin'].tolist()
             random.shuffle(bins)
             num_bins = len(self.histograms[feature]['count'])
             split = []
@@ -377,6 +385,29 @@ class EBM():
                 split = max_split.copy()
         return split
 
+    def pos_neg_calc(self, val):
+        minus_val = -val
+        if val > 0:
+            if self.neg_output_values > 0:
+                if self.neg_output_values >= val:
+                    self.neg_output_values -= val
+                else:
+                    self.pos_output_values += (val - self.neg_output_values)
+                    self.neg_output_values = 0
+            else:
+                self.pos_output_values += val
+        
+        else:
+            if self.pos_output_values > 0:
+                if self.pos_output_values >= minus_val:
+                    self.pos_output_values -= minus_val
+                else:
+                    self.neg_output_values += (minus_val - self.pos_output_values)
+                    self.pos_output_values = 0
+            else:
+                self.neg_output_values += minus_val
+
+
     def fit(self):
         self.preprocess()
         self.candidate_feature = self.df.columns.tolist()
@@ -389,7 +420,9 @@ class EBM():
         self.af_count = {}
         for c in self.candidate_feature:
             self.af_count[c] = self.args.af_count
-
+        self.pos_output_values = 0
+        self.neg_output_values = 0
+        self.est_hessian = 0.5
         for epoch in range(self.args.epochs):
             # print(epoch)
             # initialize
@@ -415,8 +448,13 @@ class EBM():
                 self.additive_terms[epoch][feature] = {}
                 self.additive_terms[epoch][feature]['additive_term'] = []
                 mean_score = 0
-                total_data = 0
-                
+
+                # set estimated hessian (classification)
+                if self.args.privacy and self.args.classification_hessian:
+                    # print((max(self.pos_output_values, self.neg_output_values) / self.total_data))
+                    est_p = 1/(1+np.exp(-(max(self.pos_output_values, self.neg_output_values) / self.total_data)))
+                    self.est_hessian = max((1-est_p)*est_p, 1e-16)
+             
                 # get best split
                 if self.data_type[feature] == NUMERICAL: # numerical
                     histogram_residuals = self.get_histogram_residual(feature)
@@ -430,9 +468,11 @@ class EBM():
                         avg_residuals = 0
                         sum_residuals = 0
                         sum_hessian = 0
+                        num_data_split = 0
                         for bin in split:
                             sum_residuals += histogram_residuals[bin]
                             sum_hessian += histogram_hessian[bin]
+                            num_data_split += self.histograms[feature]['count'][bin]
                         # noise to residual
                         if self.args.privacy and (not self.args.split_strategy):
                             if self.args.delta == 0:
@@ -446,13 +486,16 @@ class EBM():
                         # Gaussian, (e, d)-dp
                         else:
                             mean_score += sum_residuals ** 2
-                        total_data += sum_hessian
 
                         # assert that num_hist > 0
-                        if sum_hessian > 0:
-                            avg_residuals = sum_residuals / sum_hessian
+                        if self.args.privacy and (not self.args.regression) and self.args.classification_hessian:
+                            avg_residuals = sum_residuals / (self.est_hessian * num_data_split)
+                            self.pos_neg_calc(avg_residuals * num_data_split * self.lr)
                         else:
-                            avg_residuals = 0
+                            if sum_hessian > 0:
+                                avg_residuals = sum_residuals / sum_hessian
+                            else:
+                                avg_residuals = 0
                         update_grad = avg_residuals * self.lr
                         self.additive_terms[epoch][feature]['additive_term'].append(update_grad)
 
@@ -474,14 +517,17 @@ class EBM():
                     best_splits = self.get_split_categorical(feature, histogram_residuals, histogram_hessian)
                     # best_splits = [['0'], ['1', '3]', ['2', '4', '5]', ['6']]
                     self.additive_terms[epoch][feature]['split'] = best_splits
+                    
 
                     for split in best_splits:
                         avg_residuals = 0
                         sum_residuals = 0
                         sum_hessian = 0
+                        num_data_split = 0
                         for bin in split:
                             sum_residuals += histogram_residuals[bin]
                             sum_hessian += histogram_hessian[bin]
+                            num_data_split += self.histograms[feature]['count'][bin]
                         if self.args.privacy and (not self.args.split_strategy):
                             if self.args.delta == 0:
                                 # b or lambda = self.residual_noise_scale * self.range_label
@@ -495,12 +541,15 @@ class EBM():
                         # Gaussian, (e, d)-dp
                         else:
                             mean_score += sum_residuals ** 2
-                        total_data += sum_hessian
 
-                        if sum_hessian > 0:
-                            avg_residuals = sum_residuals / sum_hessian
+                        if self.args.privacy and (not self.args.regression) and self.args.classification_hessian:
+                            avg_residuals = sum_residuals / (self.est_hessian * num_data_split)
+                            self.pos_neg_calc(avg_residuals * num_data_split * self.lr)
                         else:
-                            avg_residuals = 0
+                            if sum_hessian > 0:
+                                avg_residuals = sum_residuals / sum_hessian
+                            else:
+                                avg_residuals = 0
                         update_grad = avg_residuals * self.lr
                         self.additive_terms[epoch][feature]['additive_term'].append(update_grad)
 
@@ -516,7 +565,7 @@ class EBM():
                                     self.output_values[idx] += update_grad
                                     self.residuals[idx] = self.label[idx] -1 + (1/(1+np.exp(self.output_values[idx])))
                 
-                mean_score = mean_score / total_data
+                mean_score = mean_score / self.total_data
                 mean_scores[feature] = mean_score
             # tracking privacy budget
             if self.args.delta == 0:

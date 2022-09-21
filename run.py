@@ -13,7 +13,7 @@ parser = argparse.ArgumentParser(description='DP_EBM')
 parser.add_argument('-p', '--data_path', default='data/adult.csv', help='dataset to use: adult, ...')
 parser.add_argument('-l', '--label', help='the name of label column')
 parser.add_argument('--regression', default=False, action='store_true', help='default is binary classification')
-# parser.add_argument('--classification_hessian', default=False, action='store_true')
+parser.add_argument('--classification_hessian', default=False, action='store_true')
 parser.add_argument('--n_runs', type=int, default=1)
 parser.add_argument('--seed', type=int, default=2022)
 
