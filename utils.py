@@ -26,10 +26,10 @@ def train_test_split(df, train_ratio):
     return train, test
 
 def write_columns(wr):
-    wr.writerow(['data', 'n_runs', 'privacy', 'eps', 'delta', 'ss', 'af', 'af_epoch', 'af_prob', 'af_mr', 'af_tc', 'af_count', 'adaptive_lr', 'lr', 'epo', 'cls_hes', 'rmse', 'rmse_std', 'acc', 'acc_std', 'auroc', 'auroc_std'])
+    wr.writerow(['data', 'n_runs', 'privacy', 'eps', 'delta', 'ss', 'af', 'af_epoch', 'af_prob', 'af_mr', 'af_tc', 'cls_lr', 'adaptive_lr', 'lr', 'epo', 'cls_hes', 'rmse', 'rmse_std', 'acc', 'acc_std', 'auroc', 'auroc_std'])
 
 def make_write_lst(args):
-    lst = [args.data_path, args.n_runs, args.privacy, args.eps, args.delta, args.split_strategy, args.adaptive_feature, args.af_epoch, args.af_prob, args.af_max_remove, args.af_threshold_column, args.af_count, args.adaptive_lr, args.lr, args.epochs, args.classification_hessian]
+    lst = [args.data_path, args.n_runs, args.privacy, args.eps, args.delta, args.split_strategy, args.adaptive_feature, args.af_epoch, args.af_prob, args.af_max_remove, args.af_threshold_column, args.cls_lr, args.adaptive_lr, args.lr, args.epochs, args.classification_hessian]
 
     return lst
 

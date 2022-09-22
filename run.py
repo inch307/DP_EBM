@@ -29,10 +29,11 @@ parser.add_argument('--adaptive_feature', default=False, action='store_true')
 parser.add_argument('--adaptive_lr', default=False, action='store_true', help='adpative lr when adaptive feature')
 parser.add_argument('--af_epoch', default=1, type=int, help='prune feature each af_epoch')
 parser.add_argument('--af_prob', default=0.01, type=float, help='prune probabilty bound')
-parser.add_argument('--af_max_remove', default=2, type=int, help='at each af_epoch, #af_max_prune features can be removed at most')
+parser.add_argument('--af_max_remove', default=100, type=int, help='at each af_epoch, #af_max_prune features can be removed at most')
 parser.add_argument('--af_threshold_column', default=False, help='false: analytic adaptive_feature')
 parser.add_argument('--af_count', default=1, type=int)
 parser.add_argument('--max_bins', default=32, type=int)
+parser.add_argument('--cls_lr', default=0, type=float, help='classification hessian learning rate')
 
 
 

@@ -420,9 +420,9 @@ class EBM():
         self.af_count = {}
         for c in self.candidate_feature:
             self.af_count[c] = self.args.af_count
-        self.pos_output_values = 0
-        self.neg_output_values = 0
-        self.est_hessian = 0.5
+        self.est_output_value = 0
+        if self.args.cls_lr != 0:
+            self.est_output_value_step = np.log((self.args.cls_lr) / (1-self.args.cls_lr)) / (len(self.candidate_feature) * self.args.epochs)
         for epoch in range(self.args.epochs):
             # print(epoch)
             # initialize
@@ -448,12 +448,6 @@ class EBM():
                 self.additive_terms[epoch][feature] = {}
                 self.additive_terms[epoch][feature]['additive_term'] = []
                 mean_score = 0
-
-                # set estimated hessian (classification)
-                if self.args.privacy and self.args.classification_hessian:
-                    # print((max(self.pos_output_values, self.neg_output_values) / self.total_data))
-                    est_p = 1/(1+np.exp(-(max(self.pos_output_values, self.neg_output_values) / self.total_data)))
-                    self.est_hessian = max((1-est_p)*est_p, 1e-16)
              
                 # get best split
                 if self.data_type[feature] == NUMERICAL: # numerical
@@ -488,9 +482,10 @@ class EBM():
                             mean_score += sum_residuals ** 2
 
                         # assert that num_hist > 0
-                        if self.args.privacy and (not self.args.regression) and self.args.classification_hessian:
-                            avg_residuals = sum_residuals / (self.est_hessian * num_data_split)
-                            self.pos_neg_calc(avg_residuals * num_data_split * self.lr)
+                        if self.args.privacy and (not self.args.regression) and (self.args.cls_lr!=0):
+                            est_prob = 1 / (1 + np.exp(-self.est_output_value))
+                            est_hessian = est_prob * (1-est_prob)
+                            avg_residuals = sum_residuals / (sum_hessian * est_hessian)
                         else:
                             if sum_hessian > 0:
                                 avg_residuals = sum_residuals / sum_hessian
@@ -542,9 +537,10 @@ class EBM():
                         else:
                             mean_score += sum_residuals ** 2
 
-                        if self.args.privacy and (not self.args.regression) and self.args.classification_hessian:
-                            avg_residuals = sum_residuals / (self.est_hessian * num_data_split)
-                            self.pos_neg_calc(avg_residuals * num_data_split * self.lr)
+                        if self.args.privacy and (not self.args.regression) and (self.args.cls_lr!=0):
+                            est_prob = 1 / (1 + np.exp(-self.est_output_value))
+                            est_hessian = est_prob * (1-est_prob)
+                            avg_residuals = sum_residuals / (sum_hessian * est_hessian)
                         else:
                             if sum_hessian > 0:
                                 avg_residuals = sum_residuals / sum_hessian
@@ -567,6 +563,7 @@ class EBM():
                 
                 mean_score = mean_score / self.total_data
                 mean_scores[feature] = mean_score
+                self.est_output_value += self.est_output_value_step
             # tracking privacy budget
             if self.args.delta == 0:
                 self.remain_eps = self.remain_eps - (self.remain_eps / (self.args.epochs - epoch))
@@ -590,7 +587,10 @@ class EBM():
                 self.af_epoch = 0
                 # print(self.candidate_feature)
                 if self.args.adaptive_lr:
-                    self.lr += self.lr / len(self.candidate_feature) * len(remove_features)
+                    # epochs * cf * S = epochs * (cf - x) * S'
+                    self.lr = len(self.candidate_feature) * self.lr / (len(self.candidate_feature) - len(remove_features))
+                if self.args.cls_lr:
+                    self.est_output_value_step = len(self.candidate_feature) * self.est_output_value_step / (len(self.candidate_feature) - len(remove_features))
                 for r in remove_features:
                     self.candidate_feature.remove(r)
                 # print(self.candidate_feature)
