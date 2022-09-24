@@ -184,7 +184,7 @@ class EBM():
         
         return
 
-    def get_af_threshold(self, feature, epoch):
+    def get_af_threshold(self, feature, epoch, num_data_split):
         def regularized_gamma(x):
             return scipy.special.gammainc(k, x/theta) - self.args.af_prob
         split = self.additive_terms[epoch][feature]['split']
@@ -222,9 +222,17 @@ class EBM():
                 theta = sum(thetas) / (k * self.total_data)
             # Gaussian DP, random_split
             else:
-                # sum of Gamma(1/2, 2*sigma^2) -> Gamma(n/2, 2*sigma^2)
-                k = len(split) / 2
-                theta = 2 * ((self.range_label * self.residual_noise_scale) ** 2) / self.total_data
+                # # sum of Gamma(1/2, 2*sigma^2) -> Gamma(n/2, 2*sigma^2)
+                # k = len(split) / 2
+                # theta = 2 * ((self.range_label * self.residual_noise_scale) ** 2) / self.total_data
+                sum_theta_k = 0
+                sum_thetasq_k = 0
+                sigma = (self.range_label * self.residual_noise_scale)
+                for num_data in num_data_split:
+                    sum_theta_k += (sigma**2 / (num_data * self.total_data))
+                    sum_thetasq_k += (2 * sigma**4) / ((num_data)**2 * (self.total_data)**2)
+                k = (sum_theta_k)**2 / sum_thetasq_k
+                theta = sum_theta_k / k
   
         sol = scipy.optimize.root_scalar(regularized_gamma,bracket=[1e-8, k*theta/(1-self.args.af_prob)],method='brentq')
         return sol.root
@@ -421,8 +429,10 @@ class EBM():
         for c in self.candidate_feature:
             self.af_count[c] = self.args.af_count
         self.est_output_value = 0
+        self.est_prob = 0.5
         if self.args.cls_lr != 0:
             self.est_output_value_step = np.log((self.args.cls_lr) / (1-self.args.cls_lr)) / (len(self.candidate_feature) * self.args.epochs)
+            self.est_prob_step = (self.args.cls_lr - 0.5) / (len(self.candidate_feature) * self.args.epochs)
         for epoch in range(self.args.epochs):
             # print(epoch)
             # initialize
@@ -437,6 +447,7 @@ class EBM():
             self.af_epoch += 1
             mean_scores = {}
             remove_features = []
+            num_data_splits = {}
             if self.args.delta == 0:
                 self.residual_noise_scale = (self.args.epochs - epoch) * len(self.candidate_feature) / self.remain_eps
             else:
@@ -447,6 +458,7 @@ class EBM():
                 # print(feature)
                 self.additive_terms[epoch][feature] = {}
                 self.additive_terms[epoch][feature]['additive_term'] = []
+                num_data_splits[feature] = []
                 mean_score = 0
              
                 # get best split
@@ -467,6 +479,7 @@ class EBM():
                             sum_residuals += histogram_residuals[bin]
                             sum_hessian += histogram_hessian[bin]
                             num_data_split += self.histograms[feature]['count'][bin]
+                        num_data_splits[feature].append(num_data_split)
                         # noise to residual
                         if self.args.privacy and (not self.args.split_strategy):
                             if self.args.delta == 0:
@@ -479,12 +492,15 @@ class EBM():
                             mean_score += abs(sum_residuals)
                         # Gaussian, (e, d)-dp
                         else:
-                            mean_score += sum_residuals ** 2
+                            mean_score += (sum_residuals ** 2) / num_data_split
 
                         # assert that num_hist > 0
                         if self.args.privacy and (not self.args.regression) and (self.args.cls_lr!=0):
-                            est_prob = 1 / (1 + np.exp(-self.est_output_value))
-                            est_hessian = est_prob * (1-est_prob)
+                            # est_prob = 1 / (1 + np.exp(-self.est_output_value))
+                            # est_hessian = est_prob * (1-est_prob)
+                            # avg_residuals = sum_residuals / (sum_hessian * est_hessian)
+
+                            est_hessian = self.est_prob * (1-self.est_prob)
                             avg_residuals = sum_residuals / (sum_hessian * est_hessian)
                         else:
                             if sum_hessian > 0:
@@ -523,6 +539,7 @@ class EBM():
                             sum_residuals += histogram_residuals[bin]
                             sum_hessian += histogram_hessian[bin]
                             num_data_split += self.histograms[feature]['count'][bin]
+                        num_data_splits[feature].append(num_data_split)
                         if self.args.privacy and (not self.args.split_strategy):
                             if self.args.delta == 0:
                                 # b or lambda = self.residual_noise_scale * self.range_label
@@ -535,11 +552,14 @@ class EBM():
                             mean_score += abs(sum_residuals)
                         # Gaussian, (e, d)-dp
                         else:
-                            mean_score += sum_residuals ** 2
+                            mean_score += (sum_residuals ** 2) / num_data_split
 
                         if self.args.privacy and (not self.args.regression) and (self.args.cls_lr!=0):
-                            est_prob = 1 / (1 + np.exp(-self.est_output_value))
-                            est_hessian = est_prob * (1-est_prob)
+                            # est_prob = 1 / (1 + np.exp(-self.est_output_value))
+                            # est_hessian = est_prob * (1-est_prob)
+                            # avg_residuals = sum_residuals / (sum_hessian * est_hessian)
+
+                            est_hessian = self.est_prob * (1-self.est_prob)
                             avg_residuals = sum_residuals / (sum_hessian * est_hessian)
                         else:
                             if sum_hessian > 0:
@@ -563,7 +583,9 @@ class EBM():
                 
                 mean_score = mean_score / self.total_data
                 mean_scores[feature] = mean_score
-                self.est_output_value += self.est_output_value_step
+                if self.args.cls_lr:
+                    self.est_output_value += self.est_output_value_step
+                    self.est_prob += self.est_prob_step
             # tracking privacy budget
             if self.args.delta == 0:
                 self.remain_eps = self.remain_eps - (self.remain_eps / (self.args.epochs - epoch))
@@ -575,7 +597,12 @@ class EBM():
                 mean_scores = {k: v for k, v in sorted(mean_scores.items(), key=lambda item: item[1])}
                 # print(mean_scores)
                 for k, v in mean_scores.items():
-                    af_threshold = self.get_af_threshold(k, epoch)
+                    # print('mean')
+                    # print(v)
+                    # print('af')2
+                    
+                    af_threshold = self.get_af_threshold(k, epoch, num_data_splits[k])
+                    # print(af_threshold)
                     # print(af_threshold)
                     if v < af_threshold:
                         # print(f'threshold: {af_threshold}, value: {v}, removed: {k}')
@@ -588,9 +615,12 @@ class EBM():
                 # print(self.candidate_feature)
                 if self.args.adaptive_lr:
                     # epochs * cf * S = epochs * (cf - x) * S'
-                    self.lr = len(self.candidate_feature) * self.lr / (len(self.candidate_feature) - len(remove_features))
+                    if (len(self.candidate_feature) - len(remove_features)) != 0:
+                        self.lr = len(self.candidate_feature) * self.lr / (len(self.candidate_feature) - len(remove_features))
                 if self.args.cls_lr:
-                    self.est_output_value_step = len(self.candidate_feature) * self.est_output_value_step / (len(self.candidate_feature) - len(remove_features))
+                    if (len(self.candidate_feature) - len(remove_features)) != 0:
+                        self.est_output_value_step = len(self.candidate_feature) * self.est_output_value_step / (len(self.candidate_feature) - len(remove_features))
+                        self.est_prob_step = len(self.candidate_feature) * self.est_prob_step / (len(self.candidate_feature) - len(remove_features))
                 for r in remove_features:
                     self.candidate_feature.remove(r)
                 # print(self.candidate_feature)

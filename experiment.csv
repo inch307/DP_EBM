@@ -1,4 +1,0 @@
-data,n_runs,privacy,eps,delta,ss,af,af_epoch,af_prob,af_mr,af_tc,af_count,adaptive_lr,lr,epo,cls_hes,rmse,rmse_std,acc,acc_std,auroc,auroc_std
-data/telco.csv,10,True,0.1,1e-06,False,False,1,0.01,2,False,1,False,0.01,300,False,,,0.7396588486140725,0.015385502268413702,0.7392358167258597,0.03140631364561171
-data/telco.csv,10,False,0.1,1e-06,False,False,1,0.01,2,False,1,False,0.01,300,True,,,0.8022032693674485,0.008837403664725475,0.8435090713718593,0.0066250495569812615
-data/telco.csv,10,True,0.1,1e-06,False,False,1,0.01,2,False,1,False,0.01,300,True,,,0.6919687277896233,0.02540447080359313,0.6672028723941187,0.051200511910195486
