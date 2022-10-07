@@ -19,8 +19,13 @@ class DPUtils:
         def f(mu, eps, delta):
             return DPUtils.delta_eps_mu(eps, mu) - delta
 
-        final_mu = brentq(lambda x: f(x, target_epsilon, delta), 1e-5, 1000)
-        return final_mu
+
+        if f(1e-10, target_epsilon, delta) * f(1000, target_epsilon, delta) > 0:
+            return 0
+
+        else:
+            final_mu = brentq(lambda x: f(x, target_epsilon, delta), 1e-10, 1000)
+            return final_mu
 
     @staticmethod
     def calc_gdp_noise_multi(total_queries, target_epsilon, delta):
@@ -29,8 +34,13 @@ class DPUtils:
         def f(mu, eps, delta):
             return DPUtils.delta_eps_mu(eps, mu) - delta
 
-        final_mu = brentq(lambda x: f(x, target_epsilon, delta), 1e-5, 1000)
+        final_mu = brentq(lambda x: f(x, target_epsilon, delta), 1e-10, 1000)
         sigma = np.sqrt(total_queries) / final_mu
+        return sigma
+
+    @staticmethod
+    def noise_from_mu(total_queries, mu):
+        sigma = np.sqrt(total_queries) / mu
         return sigma
 
     # General calculations, largely borrowed from tensorflow/privacy and presented in https://arxiv.org/abs/1911.11607
@@ -79,8 +89,8 @@ class DPUtils:
             # threshold required for a single bin.  It could in theory even be negative.
             # clip to the target_weight.  If we had more than the target weight we'd have a bin
 
-            bin_weights.append(target_weight)
-            bin_cuts = np.empty(0, dtype=np.float64)
+            bin_weights.append(0)
+            bin_cuts.append(uniform_edges[1])
         else:
             bin_cuts = np.array(bin_cuts, dtype=np.float64)
 

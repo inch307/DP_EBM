@@ -26,10 +26,10 @@ def train_test_split(df, train_ratio):
     return train, test
 
 def write_columns(wr):
-    wr.writerow(['data', 'n_runs', 'privacy', 'eps', 'delta', 'ss', 'af', 'af_epoch', 'af_prob', 'af_mr', 'af_count', 'cls_lr', 'adaptive_lr', 'lr', 'epo', 'cls_hes', 'rmse', 'rmse_std', 'acc', 'acc_std', 'auroc', 'auroc_std'])
+    wr.writerow(['data', 'n_runs', 'privacy', 'eps', 'delta', 'af', 'af_prob', 'lr', 'epo', 're_train', 'rmse', 'rmse_std', 'acc', 'acc_std', 'auroc', 'auroc_std', 'remain_eps', 're_rmse', 'std', 're_acc', 'std', 're_roc', 'std'])
 
 def make_write_lst(args):
-    lst = [args.data_path, args.n_runs, args.privacy, args.eps, args.delta, args.split_strategy, args.adaptive_feature, args.af_epoch, args.af_prob, args.af_max_remove, args.af_count, args.cls_lr, args.adaptive_lr, args.lr, args.epochs, args.classification_hessian]
+    lst = [args.data_path, args.n_runs, args.privacy, args.eps, args.delta, args.adaptive_feature, args.af_prob, args.lr, args.epochs, args.re_train]
 
     return lst
 
