@@ -2,6 +2,7 @@ import argparse
 import pandas as pd
 import csv
 import numpy as np
+from sympy import E
 import ebm as ebm
 import dpebm
 import os
@@ -105,7 +106,7 @@ def main():
                 if args.regression:
                     rmse = model.predict(test_X, test_y)
                     rmse_retrain_lst.append(rmse)
-                
+
                 else:
                     accuracy, auroc = model.predict(test_X, test_y)
                     acc_retrain_lst.append(accuracy)
