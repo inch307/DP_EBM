@@ -5,6 +5,7 @@ import numpy as np
 import ebm as ebm
 import dpebm
 import os
+from sklearn import datasets
 from utils import *
 import matplotlib.pyplot as plt
 from dputils import DPUtils
@@ -31,6 +32,7 @@ parser.add_argument('--re_train', default=False, action='store_true')
 parser.add_argument('--ret_epochs', default=30, type=int)
 parser.add_argument('--ret_lr', default=0.1, type=float)
 parser.add_argument('--max_bins', default=32, type=int)
+parser.add_argument('--fake_eps', default=0, type=float)
 
 ## tree building
 parser.add_argument('--lr', type=float, default=0.01, help='learning rate of EBM')
@@ -45,7 +47,26 @@ def main():
     args = parser.parse_args()
     print(args)
     
-    df = pd.read_csv(args.data_path)
+    if args.data_path == 'syn_class':
+        X, y = datasets.make_classification(n_samples=100000, n_features=20, n_informative=10, n_redundant=10, n_clusters_per_class=2, random_state=2022)
+        column_name = []
+        for i in range(20):
+            column_name.append(str(i))
+        X_df = pd.DataFrame(X, index=None, columns=column_name)
+        y_df = pd.DataFrame(y, index=None, columns=[args.label])
+        df =pd.concat([X_df, y_df], axis=1)
+
+    elif args.data_path == 'syn_reg':
+        X, y = datasets.make_regression(n_samples=100000, n_features=20, n_informative=10, random_state=2022)
+        column_name = []
+        for i in range(20):
+            column_name.append(str(i))
+        X_df = pd.DataFrame(X, index=None, columns=column_name)
+        y_df = pd.DataFrame(y, index=None, columns=[args.label])
+        df =pd.concat([X_df, y_df], axis=1)
+    
+    else:
+        df = pd.read_csv(args.data_path)
     # print(df)
     if os.path.exists('experiment6.csv'):
         csv_f = open('experiment6.csv', 'a', newline='')
@@ -93,9 +114,14 @@ def main():
             auroc_lst.append(auroc)
         if args.privacy:
             if args.delta == 0:
-                remain_eps_lst.append(model.remain_eps)
+                remain_eps = model.ebm_eps - model.consumed_eps
+                remain_eps_lst.append(remain_eps)
             else:
-                remain_eps = DPUtils.calc_gdp_mu(model.remain_mu, args.delta)
+                remain_mu = model.ebm_mu - model.consumed_mu
+                if remain_mu < 1e-5:
+                    remain_eps = 0
+                else:
+                    remain_eps = DPUtils.eps_from_mu(remain_mu, args.delta)
                 remain_eps_lst.append(remain_eps)
 
         # if re_train
@@ -139,35 +165,38 @@ def main():
 
     if args.privacy:
         write_lst.append(np.mean(remain_eps_lst))
+        write_lst.append(np.std(remain_eps_lst))
     else:
         write_lst.append('')
+        write_lst.append('')
+    write_lst.append(args.fake_eps)
 
-    if args.re_train:
-        if model.re_trained:
-            if args.regression:
-                rmse = np.array(rmse_retrain_lst)
-                write_lst.append(np.mean(rmse))
-                write_lst.append(np.std(rmse))
-                write_lst.append('')
-                write_lst.append('')
-                write_lst.append('')
-                write_lst.append('')
-            else:
-                acc = np.array(acc_retrain_lst)
-                auroc = np.array(auroc_retrain_lst)
-                write_lst.append('')
-                write_lst.append('')
-                write_lst.append(np.mean(acc))
-                write_lst.append(np.std(acc))
-                write_lst.append(np.mean(auroc))
-                write_lst.append(np.std(auroc))
-    else:
-        write_lst.append('')
-        write_lst.append('')
-        write_lst.append('')
-        write_lst.append('')
-        write_lst.append('')
-        write_lst.append('')
+    # if args.re_train:
+    #     if model.re_trained:
+    #         if args.regression:
+    #             rmse = np.array(rmse_retrain_lst)
+    #             write_lst.append(np.mean(rmse))
+    #             write_lst.append(np.std(rmse))
+    #             write_lst.append('')
+    #             write_lst.append('')
+    #             write_lst.append('')
+    #             write_lst.append('')
+    #         else:
+    #             acc = np.array(acc_retrain_lst)
+    #             auroc = np.array(auroc_retrain_lst)
+    #             write_lst.append('')
+    #             write_lst.append('')
+    #             write_lst.append(np.mean(acc))
+    #             write_lst.append(np.std(acc))
+    #             write_lst.append(np.mean(auroc))
+    #             write_lst.append(np.std(auroc))
+    # else:
+    #     write_lst.append('')
+    #     write_lst.append('')
+    #     write_lst.append('')
+    #     write_lst.append('')
+    #     write_lst.append('')
+    #     write_lst.append('')
         
     wr.writerow(write_lst)
     csv_f.close()

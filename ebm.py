@@ -159,18 +159,22 @@ class EBM():
         # print('histogram done')
         #### initializing
         # total data
-        total_data_sum = 0.
-        total_data_nom = 0.
-        for i in self.hist_columns:
-            if self.data_type[i] == NUMERICAL:
-                for j in self.histograms[i]['count']:
-                    total_data_sum += j
-            else:
-                for j in self.histograms[i]['count'].values():
-                    total_data_sum += j
-            total_data_nom += 1.
-        
-        self.total_data = int(total_data_sum // total_data_nom)
+        if self.args.privacy:
+            total_data_sum = 0.
+            total_data_nom = 0.
+            for i in self.hist_columns:
+                if self.data_type[i] == NUMERICAL:
+                    for j in self.histograms[i]['count']:
+                        total_data_sum += j
+                else:
+                    for j in self.histograms[i]['count'].values():
+                        total_data_sum += j
+                total_data_nom += 1.
+            
+            self.total_data = int(total_data_sum // total_data_nom)
+        else:
+            self.hist_columns = self.df.columns.tolist()
+            self.total_data = len(self.df[self.hist_columns[0]])
 
         # initialize addtivie terms
         self.intercept = 0.
@@ -207,7 +211,7 @@ class EBM():
         if self.args.delta == 0:
             # sum of exponential distribution (1, 1/lambda)
             k = len(split)
-            theta = self.residual_noise_scale * self.range_label / self.total_data
+            theta = self.residual_noise_scale * self.range_label
         else:
             # Gaussian DP
             # # sum of Gamma(1/2, 2*sigma^2) -> Gamma(n/2, 2*sigma^2)
@@ -216,13 +220,23 @@ class EBM():
             sum_theta_k = 0.
             sum_thetasq_k = 0.
             sigma = (self.range_label * self.residual_noise_scale)
+            tt1 = 0
+            tt2 = 0
             for num_data in num_data_split:
-                sum_theta_k += (sigma**2 / (num_data * self.total_data))
-                sum_thetasq_k += (2 * sigma**4) / ((num_data)**2 * (self.total_data)**2)
+                sum_theta_k += (sigma**2 / num_data )
+                tt1 += 1/num_data
+                tt2 += 2 / ((num_data)**2)
+                sum_thetasq_k += (2 * sigma**4) / (num_data**2)
             k = (sum_theta_k)**2 / sum_thetasq_k
+            print(k)
+            print((tt1)**2 / (tt2))
             theta = sum_theta_k / k
+            print(theta)
+            print((tt2*self.range_label**2*self.residual_noise_scale**2) / (tt1))
+            
   
         sol = scipy.optimize.root_scalar(regularized_gamma,bracket=[1e-16, k*theta/(1-self.args.af_prob)],method='brentq')
+        print(f'sol:{sol}')
         return sol.root
 
     def get_histogram_residual(self, feature):
@@ -418,10 +432,18 @@ class EBM():
         self.output_values = np.zeros_like(self.residuals, dtype=float)
         # Laplace
         if self.args.delta == 0:
-            self.remain_eps = self.ebm_eps
+            if self.args.fake_eps == 0:
+                self.remain_eps = self.ebm_eps
+            else:
+                self.remain_eps = self.args.fake_eps
+            self.consumed_eps = 0
         # Gaussian
         else:
-            self.remain_mu = self.ebm_mu
+            if self.args.fake_eps == 0:
+                self.remain_mu = self.ebm_mu
+            else:
+                self.remain_mu = np.sqrt(DPUtils.calc_gdp_mu(self.args.fake_eps, self.args.delta)**2 - self.hist_mu**2)
+            self.consumed_mu = 0
         self.re_trained = False
         self.cur_epochs = 0
 
@@ -475,6 +497,13 @@ class EBM():
                 self.residual_noise_scale = np.sqrt((epochs - epoch) * len(self.candidate_feature)) / self.remain_mu
 
             for feature in self.candidate_feature:
+                if self.args.privacy:
+                    if self.args.delta == 0:
+                        if self.consumed_eps + self.remain_eps / ((epochs - epoch) * len(self.candidate_feature)) > self.ebm_eps:
+                            return
+                    else:
+                        if self.consumed_mu**2 + self.remain_mu**2 / ((epochs - epoch) * len(self.candidate_feature)) > self.ebm_mu**2:
+                            return
                 self.additive_terms[epoch][feature] = {}
                 self.additive_terms[epoch][feature]['additive_term'] = []
 
@@ -582,8 +611,12 @@ class EBM():
                                     self.output_values[idx] += update_grad
                                     self.residuals[idx] = self.label[idx] -1 + (1/(1+np.exp(self.output_values[idx])))
 
-                mean_score = mean_score / self.total_data
                 mean_scores[feature] = mean_score
+                if self.args.privacy:
+                    if self.args.delta == 0:
+                        self.consumed_eps += self.remain_eps / ((epochs - epoch) * len(self.candidate_feature))
+                    else:
+                        self.consumed_mu = np.sqrt(self.consumed_mu**2 + (self.remain_mu**2 / ((epochs - epoch) * len(self.candidate_feature))))
 
             # tracking privacy budget
             if self.args.delta == 0:
