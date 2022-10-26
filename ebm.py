@@ -222,20 +222,20 @@ class EBM():
             sigma = (self.range_label * self.residual_noise_scale)
             tt1 = 0
             tt2 = 0
-            print(f'nds: {num_data_split}')
+            # print(f'nds: {num_data_split}')
             for num_data in num_data_split:
                 sum_theta_k += (sigma**2 / num_data )
                 tt1 += 1/num_data
                 tt2 += 2 / ((num_data)**2)
                 sum_thetasq_k += (2 * sigma**4) / (num_data**2)
             k = (sum_theta_k)**2 / sum_thetasq_k
-            print('kkkk')
-            print(k)
-            print((tt1)**2 / (tt2))
+            # print('kkkk')
+            # print(k)
+            # print((tt1)**2 / (tt2))
             theta = sum_theta_k / k
-            print('thetatheta')
-            print(theta)
-            print((tt2*self.range_label**2*self.residual_noise_scale**2) / (tt1))
+            # print('thetatheta')
+            # print(theta)
+            # print((tt2*self.range_label**2*self.residual_noise_scale**2) / (tt1))
             
   
         sol = scipy.optimize.root_scalar(regularized_gamma,bracket=[1e-16, k*theta/(1-self.args.af_prob)],method='brentq')
@@ -395,8 +395,8 @@ class EBM():
                         split.append(lst)
                         lst = [bins[idx]]
                 split.append(lst)
-                print(f'sp: {split_points}')
-                print(f's: {split}')
+                # print(f'sp: {split_points}')
+                # print(f's: {split}')
 
         # sub-optimal split
         else:
@@ -563,10 +563,10 @@ class EBM():
                     best_splits = self.get_split_numerical(feature, histogram_residuals, histogram_hessian)
                     # best_splits = [[0], [1, 2], [3, 4, 5], [6]]
                     self.additive_terms[epoch][feature]['split'] = best_splits
-                    print(feature)
-                    print(self.histograms[feature]['count'])
-                    print(histogram_residuals)
-                    print(f'best_splits: {best_splits}')
+                    # print(feature)
+                    # print(self.histograms[feature]['count'])
+                    # print(histogram_residuals)
+                    # print(f'best_splits: {best_splits}')
 
                     for split in best_splits:
                         avg_residuals = 0.

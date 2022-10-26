@@ -3,11 +3,9 @@ import pandas as pd
 import csv
 import numpy as np
 import ebm as ebm
-import dpebm
 import os
 from utils import *
 from sklearn import datasets
-import matplotlib.pyplot as plt
 from dputils import DPUtils
 import time
 
@@ -81,7 +79,7 @@ def main():
     rmse_lst = []
     acc_lst = []
     auroc_lst = []
-    remain_eps_lst = []
+    eps_lst = []
     rmse_retrain_lst = []
     acc_retrain_lst = []
     auroc_retrain_lst = []
@@ -115,14 +113,14 @@ def main():
         if args.privacy:
             if args.delta == 0:
                 remain_eps = model.ebm_eps - model.consumed_eps
-                remain_eps_lst.append(remain_eps)
+                eps_lst.append(args.eps - remain_eps)
             else:
                 remain_mu = model.ebm_mu - model.consumed_mu
                 if remain_mu < 1e-5:
                     remain_eps = 0
                 else:
                     remain_eps = DPUtils.eps_from_mu(remain_mu, args.delta)
-                remain_eps_lst.append(remain_eps)
+                eps_lst.append(args.eps - remain_eps)
 
         # if re_train
         if args.re_train:
@@ -164,8 +162,8 @@ def main():
         write_lst.append(np.std(auroc))
 
     if args.privacy:
-        write_lst.append(np.mean(remain_eps_lst))
-        write_lst.append(np.std(remain_eps_lst))
+        write_lst.append(np.mean(eps_lst))
+        write_lst.append(np.std(eps_lst))
     else:
         write_lst.append('')
         write_lst.append('')

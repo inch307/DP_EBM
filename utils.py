@@ -27,7 +27,7 @@ def train_test_split(df, train_ratio):
 
 def write_columns(wr):
     # wr.writerow(['data', 'n_runs', 'privacy', 'eps', 'delta', 'af', 'af_prob', 'lr', 'epo', 're_train', 'rmse', 'rmse_std', 'acc', 'acc_std', 'auroc', 'auroc_std', 'remain_eps', 're_rmse', 'std', 're_acc', 'std', 're_roc', 'std'])
-    wr.writerow(['data', 'n_runs', 'privacy', 'eps', 'delta', 'af', 'af_prob', 'lr', 'epo', 're_train', 'rmse', 'rmse_std', 'acc', 'acc_std', 'auroc', 'auroc_std', 'remain_eps', 'remain_eps_std' , 'fake_eps'])
+    wr.writerow(['data', 'n_runs', 'privacy', 'eps', 'delta', 'af', 'af_prob', 'lr', 'epo', 're_train', 'rmse', 'rmse_std', 'acc', 'acc_std', 'auroc', 'auroc_std', 'actual_eps', 'actual_eps_std' , 'fake_eps'])
 
 def make_write_lst(args):
     lst = [args.data_path, args.n_runs, args.privacy, args.eps, args.delta, args.adaptive_feature, args.af_prob, args.lr, args.epochs, args.re_train]
