@@ -289,7 +289,7 @@ class EBM():
                 split = []
                 split_points = [0]
                 for i in range(num_bins-1):
-                    split_points.append(random.randint(0, 1))
+                    split_points.append(1)
                 lst = []
                 for idx, v in enumerate(split_points):
                     if v == 0:
@@ -369,7 +369,7 @@ class EBM():
                 split = []
                 split_points = [0]
                 for i in range(num_bins-1):
-                    split_points.append(random.randint(0, 1))
+                    split_points.append(1)
                 lst = []
                 for idx, v in enumerate(split_points):
                     if v == 0:
