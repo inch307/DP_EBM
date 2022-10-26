@@ -3,11 +3,9 @@ import pandas as pd
 import csv
 import numpy as np
 import ebm as ebm
-import dpebm
 import os
 from utils import *
 from sklearn import datasets
-import matplotlib.pyplot as plt
 from dputils import DPUtils
 import time
 

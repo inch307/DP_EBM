@@ -1,5 +1,3 @@
-$lr_o = 0.1
-For ($i=1;$i-lt11;$i++) {
-	$lr = $lr_o * $i
-	python .\run.py --label label --lr $lr --epochs 300 --max_leaves 3  --privacy --split_strategy --eps 8.0 --delta 0
-}
+python ./run.py --data_path data/telco.csv --label Churn --lr 0.01 --epochs 300 --max_leaves 3 --eps 0 --delta 0 --af_prob 0 --n_runs 10
+python ./run.py --data_path data/telco.csv --label Churn --lr 0.01 --epochs 300 --max_leaves 3 --eps 1 --delta 0 --n_runs 10 --adaptive_feature --af_prob 0.1 --fake_eps 4 --privacy
+pause

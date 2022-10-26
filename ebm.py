@@ -222,21 +222,24 @@ class EBM():
             sigma = (self.range_label * self.residual_noise_scale)
             tt1 = 0
             tt2 = 0
+            print(f'nds: {num_data_split}')
             for num_data in num_data_split:
                 sum_theta_k += (sigma**2 / num_data )
                 tt1 += 1/num_data
                 tt2 += 2 / ((num_data)**2)
                 sum_thetasq_k += (2 * sigma**4) / (num_data**2)
             k = (sum_theta_k)**2 / sum_thetasq_k
+            print('kkkk')
             print(k)
             print((tt1)**2 / (tt2))
             theta = sum_theta_k / k
+            print('thetatheta')
             print(theta)
             print((tt2*self.range_label**2*self.residual_noise_scale**2) / (tt1))
             
   
         sol = scipy.optimize.root_scalar(regularized_gamma,bracket=[1e-16, k*theta/(1-self.args.af_prob)],method='brentq')
-        print(f'sol:{sol}')
+        # print(f'sol:{sol}')
         return sol.root
 
     def get_histogram_residual(self, feature):
@@ -281,20 +284,39 @@ class EBM():
 
         # random split
         if self.args.privacy:
-            # random split
             num_bins = len(self.histograms[feature]['count'])
-            split = []
-            split_points = [0]
-            for i in range(num_bins-1):
-                split_points.append(random.randint(0, 1))
-            lst = []
-            for idx, v in enumerate(split_points):
-                if v == 0:
-                    lst.append(idx)
-                else:
-                    split.append(lst)
-                    lst = [idx]
-            split.append(lst)
+            if num_bins < self.args.max_leaves:
+                split = []
+                split_points = [0]
+                for i in range(num_bins-1):
+                    split_points.append(random.randint(0, 1))
+                lst = []
+                for idx, v in enumerate(split_points):
+                    if v == 0:
+                        lst.append(idx)
+                    else:
+                        split.append(lst)
+                        lst = [idx]
+                split.append(lst)
+                # print(f'sp: {split_points}')
+                # print(f's: {split}')
+            
+            else:
+                split = []
+                split_points = [0 for i in range(num_bins)]
+                points = random.sample(range(1, num_bins), k=self.args.max_leaves-1)
+                for i in points:
+                    split_points[i] = 1
+                lst = []
+                for idx, v in enumerate(split_points):
+                    if v == 0:
+                        lst.append(idx)
+                    else:
+                        split.append(lst)
+                        lst = [idx]
+                split.append(lst)
+            # print(f'sp: {split_points}')
+            # print(f's: {split}')
 
         # sub-optimal split
         else: 
@@ -339,21 +361,42 @@ class EBM():
     def get_split_categorical(self, feature, histogram_residuals, histogram_hessian):
         # random split
         if self.args.privacy:
-            bins = self.histograms[feature]['bin'].tolist()
-            random.shuffle(bins)
             num_bins = len(self.histograms[feature]['count'])
-            split = []
-            split_points = [0]
-            for i in range(num_bins-1):
-                split_points.append(random.randint(0, 1))
-            lst = []
-            for idx, v in enumerate(split_points):
-                if v == 0:
-                    lst.append(bins[idx])
-                else:
-                    split.append(lst)
-                    lst = [bins[idx]]
-            split.append(lst)
+            if num_bins < self.args.max_leaves:            
+                bins = self.histograms[feature]['bin'].tolist()
+                random.shuffle(bins)
+                
+                split = []
+                split_points = [0]
+                for i in range(num_bins-1):
+                    split_points.append(random.randint(0, 1))
+                lst = []
+                for idx, v in enumerate(split_points):
+                    if v == 0:
+                        lst.append(bins[idx])
+                    else:
+                        split.append(lst)
+                        lst = [bins[idx]]
+                split.append(lst)
+
+            else:
+                bins = self.histograms[feature]['bin'].tolist()
+                random.shuffle(bins)
+                split = []
+                split_points = [0 for i in range(num_bins)]
+                points = random.sample(range(1, num_bins), k=self.args.max_leaves-1)
+                for i in points:
+                    split_points[i] = 1
+                lst = []
+                for idx, v in enumerate(split_points):
+                    if v == 0:
+                        lst.append(bins[idx])
+                    else:
+                        split.append(lst)
+                        lst = [bins[idx]]
+                split.append(lst)
+                print(f'sp: {split_points}')
+                print(f's: {split}')
 
         # sub-optimal split
         else:
@@ -431,19 +474,20 @@ class EBM():
         self.candidate_feature = self.hist_columns + []
         self.output_values = np.zeros_like(self.residuals, dtype=float)
         # Laplace
-        if self.args.delta == 0:
-            if self.args.fake_eps == 0:
-                self.remain_eps = self.ebm_eps
+        if self.args.privacy:
+            if self.args.delta == 0:
+                if self.args.fake_eps == 0:
+                    self.remain_eps = self.ebm_eps
+                else:
+                    self.remain_eps = self.args.fake_eps
+                self.consumed_eps = 0
+            # Gaussian
             else:
-                self.remain_eps = self.args.fake_eps
-            self.consumed_eps = 0
-        # Gaussian
-        else:
-            if self.args.fake_eps == 0:
-                self.remain_mu = self.ebm_mu
-            else:
-                self.remain_mu = np.sqrt(DPUtils.calc_gdp_mu(self.args.fake_eps, self.args.delta)**2 - self.hist_mu**2)
-            self.consumed_mu = 0
+                if self.args.fake_eps == 0:
+                    self.remain_mu = self.ebm_mu
+                else:
+                    self.remain_mu = np.sqrt(DPUtils.calc_gdp_mu(self.args.fake_eps, self.args.delta)**2 - self.hist_mu**2)
+                self.consumed_mu = 0
         self.re_trained = False
         self.cur_epochs = 0
 
@@ -475,12 +519,13 @@ class EBM():
     def fit_core(self, start_epochs, epochs):
         for epoch in range(start_epochs, epochs):
             # stop if privacy budget is over
-            if self.args.delta == 0:
-                if self.remain_eps <= 1e-8:
-                    break
-            else:
-                if self.remain_mu <= 1e-8:
-                    break
+            if self.args.privacy:
+                if self.args.delta == 0:
+                    if self.remain_eps <= 1e-8:
+                        break
+                else:
+                    if self.remain_mu <= 1e-8:
+                        break
             # stop if there is no candidate_feature
             if len(self.candidate_feature) == 0:
                 break
@@ -491,10 +536,11 @@ class EBM():
             num_data_splits = {}
 
             # re-calculate noise_scale from remain privacy budget
-            if self.args.delta == 0:
-                self.residual_noise_scale = (epochs - epoch) * len(self.candidate_feature) / self.remain_eps
-            else:
-                self.residual_noise_scale = np.sqrt((epochs - epoch) * len(self.candidate_feature)) / self.remain_mu
+            if self.args.privacy:
+                if self.args.delta == 0:
+                    self.residual_noise_scale = (epochs - epoch) * len(self.candidate_feature) / self.remain_eps
+                else:
+                    self.residual_noise_scale = np.sqrt((epochs - epoch) * len(self.candidate_feature)) / self.remain_mu
 
             for feature in self.candidate_feature:
                 if self.args.privacy:
@@ -517,7 +563,10 @@ class EBM():
                     best_splits = self.get_split_numerical(feature, histogram_residuals, histogram_hessian)
                     # best_splits = [[0], [1, 2], [3, 4, 5], [6]]
                     self.additive_terms[epoch][feature]['split'] = best_splits
-                    # print(best_splits)
+                    print(feature)
+                    print(self.histograms[feature]['count'])
+                    print(histogram_residuals)
+                    print(f'best_splits: {best_splits}')
 
                     for split in best_splits:
                         avg_residuals = 0.
@@ -619,10 +668,11 @@ class EBM():
                         self.consumed_mu = np.sqrt(self.consumed_mu**2 + (self.remain_mu**2 / ((epochs - epoch) * len(self.candidate_feature))))
 
             # tracking privacy budget
-            if self.args.delta == 0:
-                self.remain_eps = self.remain_eps - (self.ebm_eps / (epochs - start_epochs))
-            else:
-                self.remain_mu = np.sqrt(max((self.remain_mu ** 2) - len(self.candidate_feature)*((1/self.residual_noise_scale) ** 2), 0.))
+            if self.args.privacy:
+                if self.args.delta == 0:
+                    self.remain_eps = self.remain_eps - (self.ebm_eps / (epochs - start_epochs))
+                else:
+                    self.remain_mu = np.sqrt(max((self.remain_mu ** 2) - len(self.candidate_feature)*((1/self.residual_noise_scale) ** 2), 0.))
             
             # adaptive feature
             if self.args.adaptive_feature:
