@@ -66,11 +66,11 @@ def main():
     else:
         df = pd.read_csv(args.data_path)
     # print(df)
-    if os.path.exists('experiment6.csv'):
-        csv_f = open('experiment6.csv', 'a', newline='')
+    if os.path.exists('experiment7.csv'):
+        csv_f = open('experiment7.csv', 'a', newline='')
         wr = csv.writer(csv_f)
     else:
-        csv_f = open('experiment6.csv', 'w', newline='')
+        csv_f = open('experiment7.csv', 'w', newline='')
         wr = csv.writer(csv_f)
         write_columns(wr)
 
@@ -115,7 +115,7 @@ def main():
                 remain_eps = model.ebm_eps - model.consumed_eps
                 eps_lst.append(args.eps - remain_eps)
             else:
-                remain_mu = np.sqrt(model.ebm_mu**2 - model.consumed_mu_2)
+                remain_mu = model.ebm_mu - model.consumed_mu
                 if remain_mu < 1e-5:
                     remain_eps = 0
                 else:

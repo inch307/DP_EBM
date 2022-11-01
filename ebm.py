@@ -26,8 +26,9 @@ class EBM():
             self.hist_eps = self.args.eps - self.ebm_eps
         else:
             self.total_mu = DPUtils.calc_gdp_mu(self.args.eps, delta=self.args.delta)
-            self.hist_mu = DPUtils.calc_gdp_mu(self.args.eps * self.args.hist_ebm_ratio, delta=self.args.delta)
-            self.ebm_mu = np.sqrt(self.total_mu**2 - self.hist_mu**2)
+            self.ebm_mu = self.args.hist_ebm_ratio * self.total_mu
+            self.hist_mu = self.total_mu - self.ebm_mu
+            
 
     def preprocess(self):
         self.data_type = {}
@@ -472,22 +473,23 @@ class EBM():
     def fit(self):
         self.preprocess()
         self.candidate_feature = self.hist_columns + []
+        self.min_cf = int(len(self.candidate_feature) * 0.3)
         self.output_values = np.zeros_like(self.residuals, dtype=float)
         # Laplace
         if self.args.privacy:
             if self.args.delta == 0:
                 if self.args.fake_eps == 0:
-                    self.remain_eps = self.ebm_eps
+                    self.eps_per_epoch = self.ebm_eps / self.args.epochs
                 else:
-                    self.remain_eps = self.args.fake_eps
+                    self.eps_per_epoch = self.args.fake_eps / self.args.epochs
                 self.consumed_eps = 0
             # Gaussian
             else:
                 if self.args.fake_eps == 0:
-                    self.remain_mu = self.ebm_mu
+                    self.mu_2_per_epoch = self.ebm_mu**2 / self.args.epochs
                 else:
-                    self.remain_mu = np.sqrt(DPUtils.calc_gdp_mu(self.args.fake_eps, self.args.delta)**2 - self.hist_mu**2)
-                self.consumed_mu = 0
+                    self.mu_2_per_epoch = (DPUtils.calc_gdp_mu(self.args.fake_eps, self.args.delta))**2 / self.args.epochs
+                self.consumed_mu_2 = 0
         self.re_trained = False
         self.cur_epochs = 0
 
@@ -521,10 +523,10 @@ class EBM():
             # stop if privacy budget is over
             if self.args.privacy:
                 if self.args.delta == 0:
-                    if self.remain_eps <= 1e-8:
+                    if self.consumed_eps > self.ebm_eps:
                         break
                 else:
-                    if self.remain_mu <= 1e-8:
+                    if self.consumed_mu_2 > self.ebm_mu**2:
                         break
             # stop if there is no candidate_feature
             if len(self.candidate_feature) == 0:
@@ -538,17 +540,17 @@ class EBM():
             # re-calculate noise_scale from remain privacy budget
             if self.args.privacy:
                 if self.args.delta == 0:
-                    self.residual_noise_scale = (epochs - epoch) * len(self.candidate_feature) / self.remain_eps
+                    self.residual_noise_scale = len(self.candidate_feature) / self.eps_per_epoch
                 else:
-                    self.residual_noise_scale = np.sqrt((epochs - epoch) * len(self.candidate_feature)) / self.remain_mu
+                    self.residual_noise_scale = np.sqrt(len(self.candidate_feature) / self.mu_2_per_epoch)
 
             for feature in self.candidate_feature:
                 if self.args.privacy:
                     if self.args.delta == 0:
-                        if self.consumed_eps + self.remain_eps / ((epochs - epoch) * len(self.candidate_feature)) > self.ebm_eps:
+                        if self.consumed_eps + self.eps_per_epoch /  len(self.candidate_feature) > self.ebm_eps:
                             return
                     else:
-                        if self.consumed_mu**2 + self.remain_mu**2 / ((epochs - epoch) * len(self.candidate_feature)) > self.ebm_mu**2:
+                        if self.consumed_mu_2 + self.mu_2_per_epoch /  len(self.candidate_feature) > self.ebm_mu**2:
                             return
                 self.additive_terms[epoch][feature] = {}
                 self.additive_terms[epoch][feature]['additive_term'] = []
@@ -663,22 +665,16 @@ class EBM():
                 mean_scores[feature] = mean_score
                 if self.args.privacy:
                     if self.args.delta == 0:
-                        self.consumed_eps += self.remain_eps / ((epochs - epoch) * len(self.candidate_feature))
+                        self.consumed_eps += self.eps_per_epoch / len(self.candidate_feature)
                     else:
-                        self.consumed_mu = np.sqrt(self.consumed_mu**2 + (self.remain_mu**2 / ((epochs - epoch) * len(self.candidate_feature))))
+                        self.consumed_mu_2 += self.mu_2_per_epoch / len(self.candidate_feature)
 
-            # tracking privacy budget
-            if self.args.privacy:
-                if self.args.delta == 0:
-                    self.remain_eps = self.remain_eps - (self.ebm_eps / (epochs - start_epochs))
-                else:
-                    self.remain_mu = np.sqrt(max((self.remain_mu ** 2) - len(self.candidate_feature)*((1/self.residual_noise_scale) ** 2), 0.))
-            
             # adaptive feature
-            if self.args.adaptive_feature:
+            if self.args.adaptive_feature and self.min_cf < len(self.candidate_feature):
                 mean_scores = {k: v for k, v in sorted(mean_scores.items(), key=lambda item: item[1])}
                 for k, v in mean_scores.items():
                     af_threshold = self.get_af_threshold(k, epoch, num_data_splits[k])
+                    
                     if v < af_threshold:
                         remove_features.append(k)
 

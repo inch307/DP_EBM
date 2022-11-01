@@ -1,4 +1,5 @@
 import argparse
+from xml.dom.expatbuilder import parseString
 import pandas as pd
 import csv
 import numpy as np
@@ -115,7 +116,7 @@ def main():
                 remain_eps = model.ebm_eps - model.consumed_eps
                 eps_lst.append(args.eps - remain_eps)
             else:
-                remain_mu = model.ebm_mu - model.consumed_mu
+                remain_mu = np.sqrt(model.ebm_mu**2 - model.consumed_mu_2)
                 if remain_mu < 1e-5:
                     remain_eps = 0
                 else:
