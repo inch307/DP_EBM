@@ -45,24 +45,26 @@ def main():
     args = parser.parse_args()
     print(args)
     
-    if args.data_path == 'syn_class':
-        X, y = datasets.make_classification(n_samples=100000, n_features=20, n_informative=10, n_redundant=10, n_clusters_per_class=2, random_state=2022)
+    if args.data_path == 'syn_cls':
+        n_features = 60
+        X, y = datasets.make_classification(n_samples=10000, n_features=n_features, n_informative=5, n_redundant=5, n_clusters_per_class=2, random_state=2022)
         column_name = []
-        for i in range(20):
+        for i in range(n_features):
             column_name.append(str(i))
         X_df = pd.DataFrame(X, index=None, columns=column_name)
         y_df = pd.DataFrame(y, index=None, columns=[args.label])
         df =pd.concat([X_df, y_df], axis=1)
 
     elif args.data_path == 'syn_reg':
-        X, y = datasets.make_regression(n_samples=100000, n_features=20, n_informative=10, random_state=2022)
+        n_features = 60
+        X, y = datasets.make_regression(n_samples=10000, n_features=n_features, n_informative=10, random_state=2022)
         column_name = []
-        for i in range(20):
+        for i in range(n_features):
             column_name.append(str(i))
         X_df = pd.DataFrame(X, index=None, columns=column_name)
         y_df = pd.DataFrame(y, index=None, columns=[args.label])
         df =pd.concat([X_df, y_df], axis=1)
-    
+
     else:
         df = pd.read_csv(args.data_path)
     # print(df)
@@ -115,7 +117,7 @@ def main():
                 remain_eps = model.ebm_eps - model.consumed_eps
                 eps_lst.append(args.eps - remain_eps)
             else:
-                remain_mu = model.ebm_mu - model.consumed_mu
+                remain_mu = np.sqrt(model.ebm_mu**2 - model.consumed_mu_2)
                 if remain_mu < 1e-5:
                     remain_eps = 0
                 else:

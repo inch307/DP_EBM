@@ -473,6 +473,7 @@ class EBM():
     def fit(self):
         self.preprocess()
         self.candidate_feature = self.hist_columns + []
+        self.min_cf = int(len(self.candidate_feature) * 0.3)
         self.output_values = np.zeros_like(self.residuals, dtype=float)
         # Laplace
         if self.args.privacy:
@@ -486,6 +487,10 @@ class EBM():
             else:
                 if self.args.fake_eps == 0:
                     self.mu_2_per_epoch = self.ebm_mu**2 / self.args.epochs
+                    self.mu_per_epoch = self.ebm_mu / np.sqrt(self.args.epochs)
+                    print(len(self.candidate_feature))
+                    print(np.sqrt(self.mu_2_per_epoch / len(self.candidate_feature)))
+                    print(self.mu_per_epoch / np.sqrt(len(self.candidate_feature)))
                 else:
                     self.mu_2_per_epoch = (DPUtils.calc_gdp_mu(self.args.fake_eps, self.args.delta))**2 / self.args.epochs
                 self.consumed_mu_2 = 0
@@ -539,9 +544,15 @@ class EBM():
             # re-calculate noise_scale from remain privacy budget
             if self.args.privacy:
                 if self.args.delta == 0:
+                    print(len(self.candidate_feature))
                     self.residual_noise_scale = len(self.candidate_feature) / self.eps_per_epoch
+                    print(self.residual_noise_scale)
                 else:
+                    print(len(self.candidate_feature))
                     self.residual_noise_scale = np.sqrt(len(self.candidate_feature) / self.mu_2_per_epoch)
+                    noise = np.sqrt(len(self.candidate_feature)) / self.mu_per_epoch
+                    print(self.residual_noise_scale)
+                    print(noise)
 
             for feature in self.candidate_feature:
                 if self.args.privacy:
@@ -669,7 +680,7 @@ class EBM():
                         self.consumed_mu_2 += self.mu_2_per_epoch / len(self.candidate_feature)
 
             # adaptive feature
-            if self.args.adaptive_feature:
+            if self.args.adaptive_feature and self.min_cf < len(self.candidate_feature):
                 mean_scores = {k: v for k, v in sorted(mean_scores.items(), key=lambda item: item[1])}
                 for k, v in mean_scores.items():
                     af_threshold = self.get_af_threshold(k, epoch, num_data_splits[k])
