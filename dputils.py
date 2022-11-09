@@ -84,13 +84,10 @@ class DPUtils:
                 bin_weights.append(curr_weight)
                 curr_weight = 0
 
-        if len(bin_weights) == 1:
-            # since we're adding unbounded random noise, it's possible that the total weight is less than the
-            # threshold required for a single bin.  It could in theory even be negative.
-            # clip to the target_weight.  If we had more than the target weight we'd have a bin
+        if len(bin_weights) < 2:
+            # we are going to remove this feature
 
-            bin_weights.append(0)
-            bin_cuts.append(uniform_edges[1])
+            bin_weights, bin_cuts = [], []
         else:
             bin_cuts = np.array(bin_cuts, dtype=np.float64)
 
@@ -129,7 +126,7 @@ class DPUtils:
             weights = np.append(weights[mask], other_weight)
 
             if other_weight < target_weight:
-                if len(weights) == 1:
+                if len(weights) < 2:
                     # since we're adding unbounded random noise, it's possible that the total weight is less than the
                     # threshold required for a single bin.  It could in theory even be negative.
                     # clip to the target_weight

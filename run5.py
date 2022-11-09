@@ -4,6 +4,7 @@ import csv
 import numpy as np
 import ebm as ebm
 import os
+import sys
 from utils import *
 from sklearn import datasets
 from dputils import DPUtils
@@ -25,16 +26,13 @@ parser.add_argument('-d', '--delta', type=float, default=1e-6, help='delta for p
 parser.add_argument('--hist_ebm_ratio', type=float, default=0.9, help='ebm_eps = eps * hist_ebm_ratio, hist_eps = eps - ebm_eps')
 # parser.add_argument('--residual_eps_ratio', type=float, default=0.5, help='residual_eps = ebm_eps * ratio, hessian_eps = ebm_eps - residual_eps ;; only for privacy and classification_hessian')
 parser.add_argument('--adaptive_feature', default=False, action='store_true')
-parser.add_argument('--af_prob', default=0.01, type=float, help='prune probabilty bound')
-parser.add_argument('--re_train', default=False, action='store_true')
-parser.add_argument('--ret_epochs', default=30, type=int)
-parser.add_argument('--ret_lr', default=0.1, type=float)
+parser.add_argument('--af_prob', default=0, type=float, help='prune probabilty bound')
 parser.add_argument('--max_bins', default=32, type=int)
-parser.add_argument('--fake_eps', default=0, type=float)
+parser.add_argument('--min_cf', type=float, default=0)
 
 ## tree building
 parser.add_argument('--lr', type=float, default=0.01, help='learning rate of EBM')
-parser.add_argument('--epochs', type=int, default=100)
+parser.add_argument('--epochs', type=int, default=300)
 parser.add_argument('--max_leaves', type=int, default=3, help='the number of max leaves (max_split +1)')
 parser.add_argument('--regularization_score', type=float, default=0, help='regularization term for similarity score')
 parser.add_argument('--gamma', type=float, default=0, help='parameter for pruning (gain-gamma)')
@@ -46,6 +44,7 @@ def main():
     print(args)
     
     if args.data_path == 'syn_cls':
+        data_name = 'syn_cls'
         n_features = 60
         X, y = datasets.make_classification(n_samples=10000, n_features=n_features, n_informative=5, n_redundant=5, n_clusters_per_class=2, random_state=2022)
         column_name = []
@@ -56,6 +55,7 @@ def main():
         df =pd.concat([X_df, y_df], axis=1)
 
     elif args.data_path == 'syn_reg':
+        data_name= 'syn_reg'
         n_features = 60
         X, y = datasets.make_regression(n_samples=10000, n_features=n_features, n_informative=10, random_state=2022)
         column_name = []
@@ -66,13 +66,16 @@ def main():
         df =pd.concat([X_df, y_df], axis=1)
     
     else:
+        data_name = args.data_path[5:].split('.')[0]
         df = pd.read_csv(args.data_path)
     # print(df)
-    if os.path.exists('experiment5.csv'):
-        csv_f = open('experiment5.csv', 'a', newline='')
+    file_name = sys.argv[0].split('.')[0]
+    csv_name = 'experiment_'+ data_name + '_' + file_name +'.csv'
+    if os.path.exists(csv_name):
+        csv_f = open(csv_name, 'a', newline='')
         wr = csv.writer(csv_f)
     else:
-        csv_f = open('experiment5.csv', 'w', newline='')
+        csv_f = open(csv_name, 'w', newline='')
         wr = csv.writer(csv_f)
         write_columns(wr)
 
@@ -82,9 +85,6 @@ def main():
     acc_lst = []
     auroc_lst = []
     eps_lst = []
-    rmse_retrain_lst = []
-    acc_retrain_lst = []
-    auroc_retrain_lst = []
     for i in range(args.n_runs):
         df_train, df_test = train_test_split(df, 0.8)
         
@@ -114,37 +114,12 @@ def main():
             auroc_lst.append(auroc)
         if args.privacy:
             if args.delta == 0:
-                remain_eps = model.ebm_eps - model.consumed_eps
-                eps_lst.append(args.eps - remain_eps)
+                eps_lst.append(model.consumed_eps + model.hist_eps)
             else:
-                remain_mu = np.sqrt(model.ebm_mu**2 - model.consumed_mu_2)
-                if remain_mu < 1e-5:
-                    remain_eps = 0
-                else:
-                    remain_eps = DPUtils.eps_from_mu(remain_mu, args.delta)
-                eps_lst.append(args.eps - remain_eps)
-
-        # if re_train
-        if args.re_train:
-            model.re_train()
-            if model.re_trained:
-                if args.regression:
-                    rmse = model.predict(test_X, test_y)
-                    rmse_retrain_lst.append(rmse)
-                
-                else:
-                    accuracy, auroc = model.predict(test_X, test_y)
-                    acc_retrain_lst.append(accuracy)
-                    auroc_retrain_lst.append(auroc)
-            else:
-                if args.regression:
-                    rmse_retrain_lst.append(rmse)
-                
-                else:
-                    acc_retrain_lst.append(accuracy)
-                    auroc_retrain_lst.append(auroc)
+                eps_lst.append(DPUtils.eps_from_mu(np.sqrt(model.consumed_mu_2 + model.hist_mu_2), args.delta))
         
         # collect meta data (generate schema) labels, columns, 
+    
     if args.regression:
         rmse = np.array(rmse_lst)
         write_lst.append(np.mean(rmse))
@@ -153,6 +128,7 @@ def main():
         write_lst.append('')
         write_lst.append('')
         write_lst.append('')
+        
     else:
         acc = np.array(acc_lst)
         auroc = np.array(auroc_lst)
@@ -162,41 +138,8 @@ def main():
         write_lst.append(np.std(acc))
         write_lst.append(np.mean(auroc))
         write_lst.append(np.std(auroc))
-
-    if args.privacy:
-        write_lst.append(np.mean(eps_lst))
-        write_lst.append(np.std(eps_lst))
-    else:
-        write_lst.append('')
-        write_lst.append('')
-    write_lst.append(args.fake_eps)
-
-    # if args.re_train:
-    #     if model.re_trained:
-    #         if args.regression:
-    #             rmse = np.array(rmse_retrain_lst)
-    #             write_lst.append(np.mean(rmse))
-    #             write_lst.append(np.std(rmse))
-    #             write_lst.append('')
-    #             write_lst.append('')
-    #             write_lst.append('')
-    #             write_lst.append('')
-    #         else:
-    #             acc = np.array(acc_retrain_lst)
-    #             auroc = np.array(auroc_retrain_lst)
-    #             write_lst.append('')
-    #             write_lst.append('')
-    #             write_lst.append(np.mean(acc))
-    #             write_lst.append(np.std(acc))
-    #             write_lst.append(np.mean(auroc))
-    #             write_lst.append(np.std(auroc))
-    # else:
-    #     write_lst.append('')
-    #     write_lst.append('')
-    #     write_lst.append('')
-    #     write_lst.append('')
-    #     write_lst.append('')
-    #     write_lst.append('')
+    epsnp = np.array(eps_lst)
+    write_lst.append(np.mean(epsnp))
         
     wr.writerow(write_lst)
     csv_f.close()

@@ -1,7 +1,3 @@
-from audioop import reverse
-from codecs import unicode_escape_decode
-from sklearn.pipeline import FeatureUnion
-
 from utils import *
 from sklearn.metrics import roc_auc_score
 import numpy as np
@@ -9,6 +5,7 @@ import math
 import random
 import scipy
 import warnings
+import time
 
 from dputils import DPUtils
 
@@ -25,9 +22,9 @@ class EBM():
             self.ebm_eps = self.args.eps * self.args.hist_ebm_ratio
             self.hist_eps = self.args.eps - self.ebm_eps
         else:
-            self.total_mu = DPUtils.calc_gdp_mu(self.args.eps, delta=self.args.delta)
-            self.ebm_mu = self.args.hist_ebm_ratio * self.total_mu
-            self.hist_mu = self.total_mu - self.ebm_mu
+            self.total_mu_2 = DPUtils.calc_gdp_mu(self.args.eps, delta=self.args.delta)**2
+            self.ebm_mu_2 = self.args.hist_ebm_ratio * self.total_mu_2
+            self.hist_mu_2 = self.total_mu_2 - self.ebm_mu_2
             
 
     def preprocess(self):
@@ -71,7 +68,7 @@ class EBM():
                 self.hist_noise_scale = len(self.df.columns) / self.hist_eps
                 lap = True
             else:
-                self.hist_noise_scale = DPUtils.noise_from_mu(len(self.df.columns), self.hist_mu)
+                self.hist_noise_scale = DPUtils.noise_from_mu(len(self.df.columns), np.sqrt(self.hist_mu_2))
                 lap = False
             for i in self.df.columns:
                 col_data = self.df[i].to_numpy()
@@ -79,7 +76,7 @@ class EBM():
                     min_val = np.nanmin(col_data)
                     max_val = np.nanmax(col_data)
                     hist_edges, hist_counts = DPUtils.private_numeric_binning(col_data=col_data,sample_weight=None, noise_scale=self.hist_noise_scale, max_bins=self.args.max_bins, min_val=min_val, max_val=max_val, lap=lap)
-                    if len(hist_edges) == 0:
+                    if len(hist_counts) == 0:
                         self.columns_drop.append(i)
                         continue
                     self.hist_columns.append(i)
@@ -430,112 +427,25 @@ class EBM():
                 split = max_split.copy()
         return split
 
-    def re_train(self):
-        # check retrain
-        if self.args.delta == 0:
-            original_eps_per_tree = self.ebm_eps / (self.args.epochs)
-            re_train_eps_per_tree = self.remain_eps / (self.args.ret_epochs)
-
-            if re_train_eps_per_tree > original_eps_per_tree:
-                self.lr = self.args.ret_lr
-                self.candidate_feature = self.hist_columns + []
-                self.fit_core(self.cur_epochs, self.cur_epochs+self.args.ret_epochs)
-                self.re_trained = True
-        else:
-            original_mu_per_tree = self.ebm_mu / np.sqrt((self.args.epochs))
-            re_train_mu_per_tree = self.remain_mu / np.sqrt((self.args.ret_epochs))
-
-            if re_train_mu_per_tree > original_mu_per_tree:
-                self.lr = self.args.ret_lr
-                self.candidate_feature = self.hist_columns + []
-                self.fit_core(self.cur_epochs, self.cur_epochs+self.args.ret_epochs)
-                self.re_trained = True
-            
-        # intercept
-        for feature in self.hist_columns:
-            if self.data_type[feature] == NUMERICAL:
-                mean_score = 0.
-                for bin in range(len(self.histograms[feature]['count'])):
-                    mean_score += self.decision_function[feature][bin] * self.histograms[feature]['count'][bin]
-                mean_score = mean_score / self.total_data
-                for bin in range(len(self.histograms[feature]['count'])):
-                    self.decision_function[feature][bin] -= mean_score
-                self.intercept += mean_score
-            else:
-                mean_score = 0.
-                for bin in self.histograms[feature]['bin']:
-                    mean_score += self.decision_function[feature][bin] * self.histograms[feature]['count'][bin]
-                mean_score = mean_score / self.total_data
-                for bin in self.histograms[feature]['bin']:
-                    self.decision_function[feature][bin] -= mean_score
-                self.intercept += mean_score
-
     def fit(self):
         self.preprocess()
         self.candidate_feature = self.hist_columns + []
-        self.min_cf = int(len(self.candidate_feature) * 0.3)
+        self.min_cf = int(len(self.candidate_feature) * self.args.min_cf)
         self.output_values = np.zeros_like(self.residuals, dtype=float)
+        self.consumed_eps = 0
+        self.consumed_mu_2 = 0
         # Laplace
         if self.args.privacy:
             if self.args.delta == 0:
-                if self.args.fake_eps == 0:
-                    self.eps_per_epoch = self.ebm_eps / self.args.epochs
-                else:
-                    self.eps_per_epoch = self.args.fake_eps / self.args.epochs
-                self.consumed_eps = 0
+                self.eps_per_epoch = self.ebm_eps / self.args.epochs
             # Gaussian
             else:
-                if self.args.fake_eps == 0:
-                    self.mu_2_per_epoch = self.ebm_mu**2 / self.args.epochs
-                    self.mu_per_epoch = self.ebm_mu / np.sqrt(self.args.epochs)
-                    print(len(self.candidate_feature))
-                    print(np.sqrt(self.mu_2_per_epoch / len(self.candidate_feature)))
-                    print(self.mu_per_epoch / np.sqrt(len(self.candidate_feature)))
-                else:
-                    self.mu_2_per_epoch = (DPUtils.calc_gdp_mu(self.args.fake_eps, self.args.delta))**2 / self.args.epochs
-                self.consumed_mu_2 = 0
-        self.re_trained = False
-        self.cur_epochs = 0
+                self.mu_2_per_epoch = self.ebm_mu_2 / self.args.epochs
 
-        self.fit_core(0, self.args.epochs)
-        # print(self.decision_function['fixed acidity'][0])
-
-        # intercept
-        if not self.re_train:
-            for feature in self.hist_columns:
-                if self.data_type[feature] == NUMERICAL:
-                    mean_score = 0.
-                    for bin in range(len(self.histograms[feature]['count'])):
-                        mean_score += self.decision_function[feature][bin] * self.histograms[feature]['count'][bin]
-                    mean_score = mean_score / self.total_data
-                    for bin in range(len(self.histograms[feature]['count'])):
-                        self.decision_function[feature][bin] -= mean_score
-                    self.intercept += mean_score
-                else:
-                    mean_score = 0.
-                    for bin in self.histograms[feature]['bin']:
-                        mean_score += self.decision_function[feature][bin] * self.histograms[feature]['count'][bin]
-                    mean_score = mean_score / self.total_data
-                    for bin in self.histograms[feature]['bin']:
-                        self.decision_function[feature][bin] -= mean_score
-                    self.intercept += mean_score
-        
-        return
-
-    def fit_core(self, start_epochs, epochs):
-        for epoch in range(start_epochs, epochs):
-            # stop if privacy budget is over
-            if self.args.privacy:
-                if self.args.delta == 0:
-                    if self.consumed_eps > self.ebm_eps:
-                        break
-                else:
-                    if self.consumed_mu_2 > self.ebm_mu**2:
-                        break
+        for epoch in range(self.args.epochs):
             # stop if there is no candidate_feature
             if len(self.candidate_feature) == 0:
                 break
-            self.cur_epochs += 1
             self.additive_terms.append({})
             mean_scores = {}
             remove_features = []
@@ -544,24 +454,12 @@ class EBM():
             # re-calculate noise_scale from remain privacy budget
             if self.args.privacy:
                 if self.args.delta == 0:
-                    print(len(self.candidate_feature))
                     self.residual_noise_scale = len(self.candidate_feature) / self.eps_per_epoch
-                    print(self.residual_noise_scale)
                 else:
-                    print(len(self.candidate_feature))
                     self.residual_noise_scale = np.sqrt(len(self.candidate_feature) / self.mu_2_per_epoch)
-                    noise = np.sqrt(len(self.candidate_feature)) / self.mu_per_epoch
-                    print(self.residual_noise_scale)
-                    print(noise)
 
             for feature in self.candidate_feature:
-                if self.args.privacy:
-                    if self.args.delta == 0:
-                        if self.consumed_eps + self.eps_per_epoch /  len(self.candidate_feature) > self.ebm_eps:
-                            return
-                    else:
-                        if self.consumed_mu_2 + self.mu_2_per_epoch /  len(self.candidate_feature) > self.ebm_mu**2:
-                            return
+                t0 = time.time()
                 self.additive_terms[epoch][feature] = {}
                 self.additive_terms[epoch][feature]['additive_term'] = []
 
@@ -570,6 +468,7 @@ class EBM():
              
                 # get best split
                 if self.data_type[feature] == NUMERICAL: # numerical
+
                     histogram_residuals = self.get_histogram_residual(feature)
                     histogram_hessian = self.get_histogram_hessian(feature)
                     best_splits = self.get_split_numerical(feature, histogram_residuals, histogram_hessian)
@@ -620,7 +519,7 @@ class EBM():
                             else:
                                 for idx in self.hist_idx[feature][bin]:
                                     self.output_values[idx] += update_grad
-                                    self.residuals[idx] = self.label[idx] -1 + (1/(1+np.exp(self.output_values[idx])))
+                                    # self.residuals[idx] = self.label[idx] -1 + (1/(1+np.exp(self.output_values[idx])))
 
                 else: # categorical
                     histogram_residuals = self.get_histogram_residual(feature)
@@ -670,16 +569,18 @@ class EBM():
                             else:
                                 for idx in self.hist_idx[feature][bin]:
                                     self.output_values[idx] += update_grad
-                                    self.residuals[idx] = self.label[idx] -1 + (1/(1+np.exp(self.output_values[idx])))
-
+                                    # self.residuals[idx] = self.label[idx] -1 + (1/(1+np.exp(self.output_values[idx])))
+                if not(self.args.regression):
+                    self.residuals = self.label -1 + (1/(1+np.exp(self.output_values)))
                 mean_scores[feature] = mean_score
-                if self.args.privacy:
-                    if self.args.delta == 0:
-                        self.consumed_eps += self.eps_per_epoch / len(self.candidate_feature)
-                    else:
-                        self.consumed_mu_2 += self.mu_2_per_epoch / len(self.candidate_feature)
+            if self.args.privacy:
+                if self.args.delta == 0:
+                    self.consumed_eps += self.eps_per_epoch
+                else:
+                    self.consumed_mu_2 += self.mu_2_per_epoch
 
             # adaptive feature
+            # if self.args.adaptive_feature:
             if self.args.adaptive_feature and self.min_cf < len(self.candidate_feature):
                 mean_scores = {k: v for k, v in sorted(mean_scores.items(), key=lambda item: item[1])}
                 for k, v in mean_scores.items():
@@ -691,7 +592,28 @@ class EBM():
                 for r in remove_features:
                     self.candidate_feature.remove(r)
 
+
+        # intercept
+        for feature in self.hist_columns:
+            if self.data_type[feature] == NUMERICAL:
+                mean_score = 0.
+                for bin in range(len(self.histograms[feature]['count'])):
+                    mean_score += self.decision_function[feature][bin] * self.histograms[feature]['count'][bin]
+                mean_score = mean_score / self.total_data
+                for bin in range(len(self.histograms[feature]['count'])):
+                    self.decision_function[feature][bin] -= mean_score
+                self.intercept += mean_score
+            else:
+                mean_score = 0.
+                for bin in self.histograms[feature]['bin']:
+                    mean_score += self.decision_function[feature][bin] * self.histograms[feature]['count'][bin]
+                mean_score = mean_score / self.total_data
+                for bin in self.histograms[feature]['bin']:
+                    self.decision_function[feature][bin] -= mean_score
+                self.intercept += mean_score
+        
         return
+
     
     def predict(self, df, label_df):
         num_data = df.shape[0]

@@ -1,12 +1,22 @@
-a = {'1': 2, '3': 3}
-b = [2, 3]
+import numpy as np
+import time
 
-def A(l):
-    a = 0
-    for i in l.values():
-        a+=i
+len = 100000
 
-    return a
+a = np.random.rand(len)
+b = np.zeros_like(a)
+l = np.zeros_like(a)
 
-print(A(a))
-print(A(b))
+lst = [i for i in range(len)]
+
+t1 = time.time()
+b[lst] = l[lst] -1 + (1/(1+np.exp(a[lst])))
+t2 = time.time()
+
+print(t2-t1)
+
+t1 = time.time()
+b = l -1 + (1/(1+np.exp(a)))
+t2 = time.time()
+
+print(t2-t1)
