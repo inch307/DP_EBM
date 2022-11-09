@@ -29,6 +29,7 @@ parser.add_argument('--adaptive_feature', default=False, action='store_true')
 parser.add_argument('--af_prob', default=0, type=float, help='prune probabilty bound')
 parser.add_argument('--max_bins', default=32, type=int)
 parser.add_argument('--min_cf', type=float, default=0)
+parser.add_argument('--explain', default=False, action='store_ture')
 
 ## tree building
 parser.add_argument('--lr', type=float, default=0.01, help='learning rate of EBM')
@@ -143,6 +144,9 @@ def main():
         
     wr.writerow(write_lst)
     csv_f.close()
+
+    if args.expain:
+        model.explain()
 
     return
 

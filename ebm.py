@@ -5,6 +5,7 @@ import math
 import random
 import scipy
 import warnings
+import matplotlib.pyplot as plt
 
 from dputils import DPUtils
 
@@ -80,6 +81,7 @@ class EBM():
                         continue
                     self.hist_columns.append(i)
                     self.histograms[i] = {'bin':hist_edges[:-1], 'count':hist_counts}
+                    print(self.histograms[i])
                     self.hist_idx[i] = []
                     for j in range(len(hist_counts)):
                         self.hist_idx[i].append([])
@@ -613,7 +615,76 @@ class EBM():
         
         return
 
-    
+    def explain(self):
+        # global explain for feature importance
+        global_score = []
+        global_features = self.hist_columns + []
+        for feature in self.hist_columns:
+            abs_mean_score = 0
+            if self.data_type[feature] == NUMERICAL:
+                for bin in range(len(self.histograms[feature]['count'])):
+                    abs_mean_score += abs(self.decision_function[feature][bin]) * self.histograms[feature]['count'][bin]
+            else:
+                for bin in self.histograms[feature]['bin']:
+                    abs_mean_score += abs(self.decision_function[feature][bin]) * self.histograms[feature]['count'][bin]
+            abs_mean_score = abs_mean_score / self.total_data
+            global_score.append(abs_mean_score)
+        sorted_g_score = np.sort(global_score)
+        sort_idx = np.argsort(global_score)
+        sorted_features = [global_features[i] for i in sort_idx]
+        plt.figure(figsize=(15,10))
+        plt.barh(sorted_features, sorted_g_score)
+        plt.xlabel('importance score')
+        plt.ylabel('Feature')
+        plt.show()
+        
+        # global explain shape function
+
+        global_score = []
+        global_features = self.hist_columns + []
+        for feature in self.hist_columns:
+            if self.data_type[feature] == NUMERICAL:
+                x = []
+                y = []
+                for bin in range(len(self.histograms[feature]['count'])):
+                    y.append(self.decision_function[feature][bin])
+                    y.append(self.decision_function[feature][bin])
+                    if bin == len(self.histograms[feature]['count'])-1:
+                        x.append(self.histograms[feature]['bin'][bin])
+                        x.append(2*self.histograms[feature]['bin'][bin] - self.histograms[feature]['bin'][bin-1])
+                    else:
+                        x.append(self.histograms[feature]['bin'][bin])
+                        x.append(self.histograms[feature]['bin'][bin+1])
+                plt.figure(figsize=(15,10))
+                plt.axhline(y=0.0, color='r', linestyle='-')
+                plt.plot(x,y)
+                plt.xlabel(feature)
+                plt.ylabel('shape function')
+
+            else:
+                feature_values = []
+                shape = []
+                for bin in self.histograms[feature]['bin']:
+                    feature_values.append(bin)
+                    shape.append(self.decision_function[feature][bin])
+                sorted_shape = np.sort(shape)
+                sort_idx = np.argsort(shape)
+                sorted_fv = [feature_values[i] for i in sort_idx]
+                plt.figure(figsize=(15,10))
+                plt.axvline(x=0.0, color='r', linestyle='-')
+                plt.barh(sorted_fv, sorted_shape)
+                plt.xlabel(feature)
+                plt.ylabel('Feature values')
+            
+            plt.show()
+
+        # local explain for train data
+
+        # for feature in self.hist_columns:
+
+
+        
+
     def predict(self, df, label_df):
         num_data = df.shape[0]
         output_value = np.zeros(num_data) + self.intercept
