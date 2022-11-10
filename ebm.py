@@ -81,7 +81,6 @@ class EBM():
                         continue
                     self.hist_columns.append(i)
                     self.histograms[i] = {'bin':hist_edges[:-1], 'count':hist_counts}
-                    print(self.histograms[i])
                     self.hist_idx[i] = []
                     for j in range(len(hist_counts)):
                         self.hist_idx[i].append([])
