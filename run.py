@@ -42,7 +42,7 @@ parser.add_argument('--gamma', type=float, default=0, help='parameter for prunin
 
 def main():
     args = parser.parse_args()
-    print(args)
+    print(' ')
     
     if args.data_path == 'syn_cls':
         data_name = 'syn_cls'
@@ -139,13 +139,16 @@ def main():
         write_lst.append(np.std(acc))
         write_lst.append(np.mean(auroc))
         write_lst.append(np.std(auroc))
+        print(f'Test accuracy is: {acc*100} %')
+        return
     epsnp = np.array(eps_lst)
     write_lst.append(np.mean(epsnp))
         
     wr.writerow(write_lst)
     csv_f.close()
 
-    if args.expain:
+
+    if args.explain:
         model.explain()
 
     return
