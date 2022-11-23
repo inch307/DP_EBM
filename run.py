@@ -17,6 +17,8 @@ parser.add_argument('-l', '--label', help='the name of label column')
 parser.add_argument('--regression', default=False, action='store_true', help='default is binary classification')
 parser.add_argument('--n_runs', type=int, default=1)
 parser.add_argument('--seed', type=int, default=2022)
+parser.add_argument('--cv', type=int, default=0)
+parser.add_argument('--train_test_split', type=int, default=0.8)
 
 ## privacy parameters
 parser.add_argument('--privacy', default=False, action='store_true')
@@ -47,7 +49,7 @@ def main():
     if args.data_path == 'syn_cls':
         data_name = 'syn_cls'
         n_features = 60
-        X, y = datasets.make_classification(n_samples=10000, n_features=n_features, n_informative=5, n_redundant=5, n_clusters_per_class=2, random_state=2022)
+        X, y = datasets.make_classification(n_samples=10000, n_features=n_features, n_informative=5, n_redundant=5, n_clusters_per_class=2, random_state=args.seed)
         column_name = []
         for i in range(n_features):
             column_name.append(str(i))
@@ -58,7 +60,7 @@ def main():
     elif args.data_path == 'syn_reg':
         data_name= 'syn_reg'
         n_features = 60
-        X, y = datasets.make_regression(n_samples=10000, n_features=n_features, n_informative=10, random_state=2022)
+        X, y = datasets.make_regression(n_samples=10000, n_features=n_features, n_informative=10, random_state=args.seed)
         column_name = []
         for i in range(n_features):
             column_name.append(str(i))
@@ -85,15 +87,30 @@ def main():
     rmse_lst = []
     acc_lst = []
     auroc_lst = []
-    eps_lst = []
-    for i in range(args.n_runs):
-        df_train, df_test = train_test_split(df, 0.8)
+    # eps_lst = []
+
+    random.seed(args.seed) # random seed for experiment
+    train_idx, test_idx = train_test_split(df, args.train_test_split)
+
+    if args.cv == 0:
+        n_runs = args.n_runs
         
+    else:
+        n_runs = args.cv
+        cv = CrossValidation(df, args.cv)
+
+    for i in range(n_runs):
+        if args.cv != 0:
+            df_train, df_test = cv.get_train_test()
+        
+        if args.seed is not None:
+            random.seed(args.seed + i)
+            np.random.seed(args.seed + i)
         model = ebm.EBM(df_train, args)
         model.fit()
         
-        train_X = df_train.drop(columns=[args.label], axis=1)
-        train_y = df_train[args.label]
+        # train_X = df_train.drop(columns=[args.label], axis=1)
+        # train_y = df_train[args.label]
         test_X = df_test.drop(columns=[args.label], axis=1)
         test_y = df_test[args.label]
 
@@ -113,13 +130,11 @@ def main():
             # print(auroc)
             acc_lst.append(accuracy)
             auroc_lst.append(auroc)
-        if args.privacy:
-            if args.delta == 0:
-                eps_lst.append(model.consumed_eps + model.hist_eps)
-            else:
-                eps_lst.append(DPUtils.eps_from_mu(np.sqrt(model.consumed_mu_2 + model.hist_mu_2), args.delta))
-        
-        # collect meta data (generate schema) labels, columns, 
+        # if args.privacy:
+        #     if args.delta == 0:
+        #         eps_lst.append(model.consumed_eps + model.hist_eps)
+        #     else:
+        #         eps_lst.append(DPUtils.eps_from_mu(np.sqrt(model.consumed_mu_2 + model.hist_mu_2), args.delta))
     
     if args.regression:
         rmse = np.array(rmse_lst)
@@ -139,10 +154,10 @@ def main():
         write_lst.append(np.std(acc))
         write_lst.append(np.mean(auroc))
         write_lst.append(np.std(auroc))
-        print(f'Test accuracy is: {acc*100} %')
+        # print(f'Test accuracy is: {acc*100} %')
         return
-    epsnp = np.array(eps_lst)
-    write_lst.append(np.mean(epsnp))
+    # epsnp = np.array(eps_lst)
+    # write_lst.append(np.mean(epsnp))
         
     wr.writerow(write_lst)
     csv_f.close()

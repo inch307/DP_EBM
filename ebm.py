@@ -29,8 +29,8 @@ class EBM():
 
     def preprocess(self):
         self.data_type = {}
-        print('Initializing...')
-        print('Constructing histograms...')
+        # print('Initializing...')
+        # print('Constructing histograms...')
 
         # process label
         self.label_df = self.df[self.args.label]
@@ -431,7 +431,7 @@ class EBM():
 
     def fit(self):
         self.preprocess()
-        print('Training...')
+        # print('Training...')
         self.candidate_feature = self.hist_columns + []
         self.min_cf = int(len(self.candidate_feature) * self.args.min_cf)
         self.output_values = np.zeros_like(self.residuals, dtype=float)
@@ -688,7 +688,7 @@ class EBM():
         
 
     def predict(self, df, label_df):
-        print('Predicting...')
+        # print('Predicting...')
         num_data = df.shape[0]
         output_value = np.zeros(num_data) + self.intercept
         label = label_df.to_numpy().astype(float)
