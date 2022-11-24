@@ -81,7 +81,7 @@ def main():
         if args.cv != 0:
             df_train, df_test = cv.get_train_test()
         else:
-            df_train, df_test = get_train_test_df()
+            df_train, df_test = get_train_test_df(df, train_idx, test_idx)
         
         if args.seed is not None:
             random.seed(args.seed + i)
