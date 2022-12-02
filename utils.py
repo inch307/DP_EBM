@@ -36,8 +36,8 @@ def get_train_test_df(df, train_idx, test_idx):
 def get_dataset(args):
     if args.data_path == 'syn_cls':
         data_name = 'syn_cls'
-        n_features = 60
-        X, y = datasets.make_classification(n_samples=10000, n_features=n_features, n_informative=5, n_redundant=5, n_clusters_per_class=2, random_state=args.seed)
+        n_features = 40
+        X, y = datasets.make_classification(n_samples=10000, n_features=n_features, n_informative=10, n_redundant=5, n_clusters_per_class=2, random_state=args.seed)
         column_name = []
         for i in range(n_features):
             column_name.append(str(i))
@@ -47,7 +47,7 @@ def get_dataset(args):
 
     elif args.data_path == 'syn_reg':
         data_name= 'syn_reg'
-        n_features = 60
+        n_features = 40
         X, y = datasets.make_regression(n_samples=10000, n_features=n_features, n_informative=10, random_state=args.seed)
         column_name = []
         for i in range(n_features):
@@ -68,14 +68,12 @@ class CrossValidation:
         self.train_idx = train_idx
         self.k_fold = k_fold
         self.slicer = int(len(self.train_idx) / self.k_fold)
-        self.i = 0
     
-    def get_train_test(self):
-        train_left = self.df.loc[self.train_idx[:self.slicer * self.i]]
-        train_right = self.df.loc[self.train_idx[min(self.slicer * (self.i+1), len(self.df)):]]
+    def get_train_test(self, i):
+        train_left = self.df.loc[self.train_idx[:self.slicer * i]]
+        train_right = self.df.loc[self.train_idx[min(self.slicer * (i+1), len(self.df)):]]
         train = pd.concat([train_left, train_right])
-        test = self.df.loc[self.train_idx[self.slicer * self.i: min(self.slicer * (self.i+1), len(self.df))]]
-        self.i += 1
+        test = self.df.loc[self.train_idx[self.slicer * i: min(self.slicer * (i+1), len(self.df))]]
 
         return train, test
 

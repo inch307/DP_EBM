@@ -99,8 +99,7 @@ def main():
     else:
         for c in range(args.cv):
             for i in range(args.n_runs):
-                if args.cv != 0:
-                    df_train, df_test = cv.get_train_test()
+                df_train, df_test = cv.get_train_test(c)
                 
                 if args.seed is not None:
                     random.seed(args.seed + i)
@@ -140,7 +139,6 @@ def main():
         write_lst.append(np.mean(auroc))
         write_lst.append(np.std(auroc))
         # print(f'Test accuracy is: {acc*100} %')
-        return
     # epsnp = np.array(eps_lst)
     # write_lst.append(np.mean(epsnp))
         

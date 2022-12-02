@@ -44,7 +44,7 @@ parser.add_argument('--gamma', type=float, default=0, help='parameter for prunin
 
 def main():
     args = parser.parse_args()
-    print(' ')
+    print(args)
     
     df, data_name = get_dataset(args)
     
@@ -70,51 +70,55 @@ def main():
         random.seed(args.seed) # random seed for experiment
     train_idx, test_idx = train_test_idx(df, args.train_test_split)
 
-    if args.cv == 0:
-        n_runs = args.n_runs
-        
-    else:
-        n_runs = args.cv
+    if args.cv != 0:
         cv = CrossValidation(df, train_idx, args.cv)
 
-    for i in range(n_runs):
-        if args.cv != 0:
-            df_train, df_test = cv.get_train_test()
-        else:
+    if args.cv == 0:
+        for i in range(args.n_runs):
             df_train, df_test = get_train_test_df(df, train_idx, test_idx)
-        
-        if args.seed is not None:
-            random.seed(args.seed + i)
-            np.random.seed(args.seed + i)
-        model = ebm.EBM(df_train, args)
-        model.fit()
-        
-        # train_X = df_train.drop(columns=[args.label], axis=1)
-        # train_y = df_train[args.label]
-        test_X = df_test.drop(columns=[args.label], axis=1)
-        test_y = df_test[args.label]
-
-        # predict
-        if args.regression:
-            rmse = model.predict(test_X, test_y)
-            # np.set_printoptions(threshold=np.inf)
-            # print(mse)
-            rmse_lst.append(rmse)
             
-        else:
-            accuracy, auroc = model.predict(test_X, test_y)
-            # np.set_printoptions(threshold=np.inf)
-            # print(y_hat)
-            # print(model.intercept)
-            # print(accuracy)
-            # print(auroc)
-            acc_lst.append(accuracy)
-            auroc_lst.append(auroc)
-        # if args.privacy:
-        #     if args.delta == 0:
-        #         eps_lst.append(model.consumed_eps + model.hist_eps)
-        #     else:
-        #         eps_lst.append(DPUtils.eps_from_mu(np.sqrt(model.consumed_mu_2 + model.hist_mu_2), args.delta))
+            if args.seed is not None:
+                random.seed(args.seed + i)
+                np.random.seed(args.seed + i)
+            model = ebm.EBM(df_train, args)
+            model.fit()
+
+            test_X = df_test.drop(columns=[args.label], axis=1)
+            test_y = df_test[args.label]
+
+            # predict
+            if args.regression:
+                rmse = model.predict(test_X, test_y)
+                rmse_lst.append(rmse)
+                
+            else:
+                accuracy, auroc = model.predict(test_X, test_y)
+                acc_lst.append(accuracy)
+                auroc_lst.append(auroc)
+
+    else:
+        for c in range(args.cv):
+            for i in range(args.n_runs):
+                df_train, df_test = cv.get_train_test(c)
+                
+                if args.seed is not None:
+                    random.seed(args.seed + i)
+                    np.random.seed(args.seed + i)
+                model = ebm.EBM(df_train, args)
+                model.fit()
+
+                test_X = df_test.drop(columns=[args.label], axis=1)
+                test_y = df_test[args.label]
+
+                # predict
+                if args.regression:
+                    rmse = model.predict(test_X, test_y)
+                    rmse_lst.append(rmse)
+                    
+                else:
+                    accuracy, auroc = model.predict(test_X, test_y)
+                    acc_lst.append(accuracy)
+                    auroc_lst.append(auroc)
     
     if args.regression:
         rmse = np.array(rmse_lst)
@@ -135,7 +139,6 @@ def main():
         write_lst.append(np.mean(auroc))
         write_lst.append(np.std(auroc))
         # print(f'Test accuracy is: {acc*100} %')
-        return
     # epsnp = np.array(eps_lst)
     # write_lst.append(np.mean(epsnp))
         
