@@ -44,7 +44,7 @@ plt.rcParams['font.family'] = 'Arial'
 
 original_eps_lst = [0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100]
 
-fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(13,4))
+fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(15,4))
 
 ########################################### Modify here ###############################################
 
@@ -112,6 +112,10 @@ for e in eps1_lst:
     y2.append(df.loc[ (df['eps'] == e) & (df['delta'] == args.delta) & (df['privacy'] == True) & (df['af'] == True), Y].values[0])
     # i += 1
 
+print(path1)
+for i in range(len(y1)):
+    print(f'Eps: {eps1_lst[i],  {y2[i]/y1[i] *100 - 100}}% improvment')
+
 ax1.plot(y0, marker='x', label='EBM')
 ax1.plot(y1, marker='H', label='DP-EBM')
 ax1.plot(y2, marker='^', label=dpebmfp)
@@ -142,6 +146,10 @@ y2 = []
 for e in eps2_lst:
     y2.append(df.loc[ (df['eps'] == e) & (df['delta'] == args.delta) & (df['privacy'] == True) & (df['af'] == True), Y].values[0])
 
+print(path2)
+for i in range(len(y1)):
+    print(f'Eps: {eps2_lst[i],  {y2[i]/y1[i] *100 - 100}}% improvment')
+
 ax2.plot(y0, marker='x', label='EBM')
 ax2.plot(y1, marker='H', label='DP-EBM')
 ax2.plot(y2, marker='^', label=dpebmfp)
@@ -171,6 +179,10 @@ for e in eps3_lst:
 y2 = []
 for e in eps3_lst:
     y2.append(df.loc[ (df['eps'] == e) & (df['delta'] == args.delta) & (df['privacy'] == True) & (df['af'] == True), Y].values[0])
+
+print(path3)
+for i in range(len(y1)):
+    print(f'Eps: {eps3_lst[i],  {y2[i]/y1[i] *100 - 100}}% improvment')
 
 ax3.plot(y0, marker='x', label='EBM')
 ax3.plot(y1, marker='H', label='DP-EBM')
