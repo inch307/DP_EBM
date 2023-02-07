@@ -584,17 +584,34 @@ class EBM():
 
             # adaptive feature
             # if self.args.adaptive_feature:
-            if self.args.adaptive_feature and self.min_cf < len(self.candidate_feature):
-                mean_scores = {k: v for k, v in sorted(mean_scores.items(), key=lambda item: item[1])}
-                for k, v in mean_scores.items():
-                    af_threshold = self.get_af_threshold(k, epoch, num_data_splits[k])
-                    
-                    if v < af_threshold:
-                        remove_features.append(k)
+            if self.min_cf > 0:
+                if self.args.adaptive_feature and self.min_cf < len(self.candidate_feature):
+                    mean_scores = {k: v for k, v in sorted(mean_scores.items(), key=lambda item: item[1])}
+                    for k, v in mean_scores.items():
+                        af_threshold = self.get_af_threshold(k, epoch, num_data_splits[k])
+                        
+                        if v < af_threshold:
+                            remove_features.append(k)
 
-                for r in remove_features:
-                    if self.min_cf < len(self.candidate_feature):
+                    for r in remove_features:
+                        if self.min_cf < len(self.candidate_feature):
+                            self.candidate_feature.remove(r)
+                            print(f'removed feature: {r} at epoch {epoch}')
+            else:
+                if self.args.adaptive_feature:
+                    mean_scores = {k: v for k, v in sorted(mean_scores.items(), key=lambda item: item[1])}
+                    for k, v in mean_scores.items():
+                        af_threshold = self.get_af_threshold(k, epoch, num_data_splits[k])
+                        
+                        if v < af_threshold:
+                            remove_features.append(k)
+
+                    for r in remove_features:
                         self.candidate_feature.remove(r)
+                        print(f'removed feature: {r} at epoch {epoch}')
+                    
+                    if len(self.candidate_feature):
+                        self.candidate_feature = self.hist_columns + []
 
 
         # intercept
