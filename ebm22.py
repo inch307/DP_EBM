@@ -1,11 +1,12 @@
 from utils import *
 from sklearn.metrics import roc_auc_score
+from sklearn.metrics import f1_score
 import numpy as np
 import math
 import random
 import scipy
 import warnings
-import time
+import matplotlib.pyplot as plt
 
 from dputils import DPUtils
 
@@ -29,6 +30,8 @@ class EBM():
 
     def preprocess(self):
         self.data_type = {}
+        # print('Initializing...')
+        # print('Constructing histograms...')
 
         # process label
         self.label_df = self.df[self.args.label]
@@ -429,11 +432,13 @@ class EBM():
 
     def fit(self):
         self.preprocess()
+        # print('Training...')
         self.candidate_feature = self.hist_columns + []
         self.min_cf = int(len(self.candidate_feature) * self.args.min_cf)
         self.output_values = np.zeros_like(self.residuals, dtype=float)
         self.consumed_eps = 0
         self.consumed_mu_2 = 0
+        self.num_trees = 0
         # Laplace
         if self.args.privacy:
             if self.args.delta == 0:
@@ -459,7 +464,6 @@ class EBM():
                     self.residual_noise_scale = np.sqrt(len(self.candidate_feature) / self.mu_2_per_epoch)
 
             for feature in self.candidate_feature:
-                t0 = time.time()
                 self.additive_terms[epoch][feature] = {}
                 self.additive_terms[epoch][feature]['additive_term'] = []
 
@@ -468,7 +472,6 @@ class EBM():
              
                 # get best split
                 if self.data_type[feature] == NUMERICAL: # numerical
-
                     histogram_residuals = self.get_histogram_residual(feature)
                     histogram_hessian = self.get_histogram_hessian(feature)
                     best_splits = self.get_split_numerical(feature, histogram_residuals, histogram_hessian)
@@ -570,14 +573,16 @@ class EBM():
                                 for idx in self.hist_idx[feature][bin]:
                                     self.output_values[idx] += update_grad
                                     # self.residuals[idx] = self.label[idx] -1 + (1/(1+np.exp(self.output_values[idx])))
-                if not(self.args.regression):
-                    self.residuals = self.label -1 + (1/(1+np.exp(self.output_values)))
+
                 mean_scores[feature] = mean_score
+                if not (self.args.regression):
+                    self.residuals = self.label -1 + (1/(1+np.exp(self.output_values)))
             if self.args.privacy:
                 if self.args.delta == 0:
                     self.consumed_eps += self.eps_per_epoch
                 else:
                     self.consumed_mu_2 += self.mu_2_per_epoch
+            self.num_trees += len(self.candidate_feature)
 
             # adaptive feature
             # if self.args.adaptive_feature:
@@ -590,7 +595,8 @@ class EBM():
                         remove_features.append(k)
 
                 for r in remove_features:
-                    self.candidate_feature.remove(r)
+                    if self.min_cf < len(self.candidate_feature):
+                        self.candidate_feature.remove(r)
 
 
         # intercept
@@ -614,8 +620,78 @@ class EBM():
         
         return
 
-    
+    def explain(self):
+        # global explain for feature importance
+        global_score = []
+        global_features = self.hist_columns + []
+        for feature in self.hist_columns:
+            abs_mean_score = 0
+            if self.data_type[feature] == NUMERICAL:
+                for bin in range(len(self.histograms[feature]['count'])):
+                    abs_mean_score += abs(self.decision_function[feature][bin]) * self.histograms[feature]['count'][bin]
+            else:
+                for bin in self.histograms[feature]['bin']:
+                    abs_mean_score += abs(self.decision_function[feature][bin]) * self.histograms[feature]['count'][bin]
+            abs_mean_score = abs_mean_score / self.total_data
+            global_score.append(abs_mean_score)
+        sorted_g_score = np.sort(global_score)
+        sort_idx = np.argsort(global_score)
+        sorted_features = [global_features[i] for i in sort_idx]
+        plt.figure(figsize=(15,10))
+        plt.barh(sorted_features, sorted_g_score)
+        plt.xlabel('importance score')
+        plt.ylabel('Feature')
+        plt.show()
+        
+        # global explain shape function
+
+        global_score = []
+        global_features = self.hist_columns + []
+        for feature in self.hist_columns:
+            if self.data_type[feature] == NUMERICAL:
+                x = []
+                y = []
+                for bin in range(len(self.histograms[feature]['count'])):
+                    y.append(self.decision_function[feature][bin])
+                    y.append(self.decision_function[feature][bin])
+                    if bin == len(self.histograms[feature]['count'])-1:
+                        x.append(self.histograms[feature]['bin'][bin])
+                        x.append(2*self.histograms[feature]['bin'][bin] - self.histograms[feature]['bin'][bin-1])
+                    else:
+                        x.append(self.histograms[feature]['bin'][bin])
+                        x.append(self.histograms[feature]['bin'][bin+1])
+                plt.figure(figsize=(15,10))
+                plt.axhline(y=0.0, color='r', linestyle='-')
+                plt.plot(x,y)
+                plt.xlabel(feature)
+                plt.ylabel('shape function')
+
+            else:
+                feature_values = []
+                shape = []
+                for bin in self.histograms[feature]['bin']:
+                    feature_values.append(bin)
+                    shape.append(self.decision_function[feature][bin])
+                sorted_shape = np.sort(shape)
+                sort_idx = np.argsort(shape)
+                sorted_fv = [feature_values[i] for i in sort_idx]
+                plt.figure(figsize=(15,10))
+                plt.axvline(x=0.0, color='r', linestyle='-')
+                plt.barh(sorted_fv, sorted_shape)
+                plt.xlabel(feature)
+                plt.ylabel('Feature values')
+            
+            plt.show()
+
+        # local explain for train data
+
+        # for feature in self.hist_columns:
+
+
+        
+
     def predict(self, df, label_df):
+        # print('Predicting...')
         num_data = df.shape[0]
         output_value = np.zeros(num_data) + self.intercept
         label = label_df.to_numpy().astype(float)
@@ -676,5 +752,10 @@ class EBM():
             mean_loss = total_loss / num_data
 
             auroc = roc_auc_score(label, y_hat)
+            # cls_pred = (y_hat[:] >= 0.5).astype(bool)
+            # print(y_hat)
+            # print(cls_pred)
+            # f1 = f1_score(label, cls_pred)
 
             return total_correct / num_data, auroc
+            # return f1, auroc

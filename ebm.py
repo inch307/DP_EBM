@@ -1,5 +1,6 @@
 from utils import *
 from sklearn.metrics import roc_auc_score
+from sklearn.metrics import f1_score
 import numpy as np
 import math
 import random
@@ -749,5 +750,10 @@ class EBM():
             mean_loss = total_loss / num_data
 
             auroc = roc_auc_score(label, y_hat)
+            # cls_pred = (y_hat[:] >= 0.5).astype(bool)
+            # print(y_hat)
+            # print(cls_pred)
+            # f1 = f1_score(label, cls_pred)
 
             return total_correct / num_data, auroc
+            # return f1, auroc
