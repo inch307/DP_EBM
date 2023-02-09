@@ -64,15 +64,17 @@ def main():
     rmse_lst = []
     acc_lst = []
     auroc_lst = []
+    num_trees_lst = []
+    time_lst = []
     # eps_lst = []
 
     if args.seed is not None:
         random.seed(args.seed) # random seed for experiment
     train_idx, test_idx = train_test_idx(df, args.train_test_split)
-
+    
     if args.cv != 0:
         cv = CrossValidation(df, train_idx, args.cv)
-
+    
     if args.cv == 0:
         for i in range(args.n_runs):
             df_train, df_test = get_train_test_df(df, train_idx, test_idx)
@@ -80,8 +82,12 @@ def main():
             if args.seed is not None:
                 random.seed(args.seed + i)
                 np.random.seed(args.seed + i)
+            
             model = ebm.EBM(df_train, args)
+            start_time = time.time()
             model.fit()
+            end_time = time.time()
+            time_lst.append(end_time - start_time)
 
             test_X = df_test.drop(columns=[args.label], axis=1)
             test_y = df_test[args.label]
@@ -95,6 +101,7 @@ def main():
                 accuracy, auroc = model.predict(test_X, test_y)
                 acc_lst.append(accuracy)
                 auroc_lst.append(auroc)
+            num_trees_lst.append(model.num_trees)
 
     else:
         for c in range(args.cv):
@@ -119,6 +126,7 @@ def main():
                     accuracy, auroc = model.predict(test_X, test_y)
                     acc_lst.append(accuracy)
                     auroc_lst.append(auroc)
+                num_trees_lst.append(model.num_trees)
     
     if args.regression:
         rmse = np.array(rmse_lst)
@@ -140,6 +148,10 @@ def main():
         write_lst.append(np.std(auroc))
         # print(f'Test accuracy is: {acc*100} %')
     # epsnp = np.array(eps_lst)
+    num_trees = np.array(num_trees_lst)
+    write_lst.append(np.mean(num_trees))
+    avg_time = np.array(time_lst)
+    write_lst.append(np.mean(avg_time))
     # write_lst.append(np.mean(epsnp))
         
     wr.writerow(write_lst)

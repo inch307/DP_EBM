@@ -599,7 +599,8 @@ class EBM():
                     for r in remove_features:
                         if self.min_cf < len(self.candidate_feature):
                             self.candidate_feature.remove(r)
-                            print(f'removed feature: {r} at epoch {epoch}')
+                            # print(f'removed feature: {r} at epoch {epoch}')
+
             else:
                 if self.args.adaptive_feature:
                     mean_scores = {k: v for k, v in sorted(mean_scores.items(), key=lambda item: item[1])}

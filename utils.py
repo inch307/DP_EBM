@@ -79,7 +79,7 @@ class CrossValidation:
 
 def write_columns(wr):
     # wr.writerow(['data', 'n_runs', 'privacy', 'eps', 'delta', 'af', 'af_prob', 'lr', 'epo', 're_train', 'rmse', 'rmse_std', 'acc', 'acc_std', 'auroc', 'auroc_std', 'remain_eps', 're_rmse', 'std', 're_acc', 'std', 're_roc', 'std'])
-    wr.writerow(['data', 'n_runs', 'cv', 'seed', 'privacy', 'eps', 'delta', 'af', 'af_prob', 'min_cf', 'lr', 'epo', 'rmse', 'rmse_std', 'acc', 'acc_std', 'auroc', 'auroc_std', 'avg_trees'])
+    wr.writerow(['data', 'n_runs', 'cv', 'seed', 'privacy', 'eps', 'delta', 'af', 'af_prob', 'min_cf', 'lr', 'epo', 'rmse', 'rmse_std', 'acc', 'acc_std', 'auroc', 'auroc_std', 'avg_trees', 'avg_time'])
 
 def make_write_lst(args):
     lst = [args.data_path, args.n_runs, args.cv, args.seed, args.privacy, args.eps, args.delta, args.adaptive_feature, args.af_prob, args.min_cf, args.lr, args.epochs]
