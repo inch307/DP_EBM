@@ -608,7 +608,7 @@ class EBM():
 
                     for r in remove_features:
                         self.candidate_feature.remove(r)
-                        print(f'removed feature: {r} at epoch {epoch}')
+                        # print(f'removed feature: {r} at epoch {epoch}')
                     
                     if len(self.candidate_feature):
                         self.candidate_feature = self.hist_columns + []
