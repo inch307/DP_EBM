@@ -64,6 +64,7 @@ def main():
     rmse_lst = []
     acc_lst = []
     auroc_lst = []
+    num_trees_lst = []
     # eps_lst = []
 
     if args.seed is not None:
@@ -95,6 +96,7 @@ def main():
                 accuracy, auroc = model.predict(test_X, test_y)
                 acc_lst.append(accuracy)
                 auroc_lst.append(auroc)
+            num_trees_lst.append(model.num_trees)
 
     else:
         for c in range(args.cv):
@@ -119,6 +121,7 @@ def main():
                     accuracy, auroc = model.predict(test_X, test_y)
                     acc_lst.append(accuracy)
                     auroc_lst.append(auroc)
+                num_trees_lst.append(model.num_trees)
     
     if args.regression:
         rmse = np.array(rmse_lst)
@@ -140,6 +143,8 @@ def main():
         write_lst.append(np.std(auroc))
         # print(f'Test accuracy is: {acc*100} %')
     # epsnp = np.array(eps_lst)
+    num_trees = np.array(num_trees_lst)
+    write_lst.append(np.mean(num_trees))
     # write_lst.append(np.mean(epsnp))
         
     wr.writerow(write_lst)

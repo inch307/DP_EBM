@@ -438,6 +438,7 @@ class EBM():
         self.output_values = np.zeros_like(self.residuals, dtype=float)
         self.consumed_eps = 0
         self.consumed_mu_2 = 0
+        self.num_trees = 0
         # Laplace
         if self.args.privacy:
             if self.args.delta == 0:
@@ -582,6 +583,8 @@ class EBM():
                 else:
                     self.consumed_mu_2 += self.mu_2_per_epoch
 
+            self.num_trees += len(self.candidate_feature)
+
             # adaptive feature
             # if self.args.adaptive_feature:
             if self.min_cf > 0:
@@ -610,7 +613,7 @@ class EBM():
                         self.candidate_feature.remove(r)
                         # print(f'removed feature: {r} at epoch {epoch}')
                     
-                    if len(self.candidate_feature):
+                    if len(self.candidate_feature)==0:
                         self.candidate_feature = self.hist_columns + []
 
 
